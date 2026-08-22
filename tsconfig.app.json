@@ -6,6 +6,6 @@
 		"paths": {
 			"@/*": ["./src/*"]
 		},
-		"types": ["vite/client", "vitest/globals"]
+		"types": ["vite/client", "vitest/globals", "node"]
 	}
 }

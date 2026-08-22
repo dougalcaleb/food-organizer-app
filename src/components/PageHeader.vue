@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /*
-The per-tab header from the handoff: an accent kicker, the big title, and a
-right-aligned meta line. The gear opens settings — the tab bar stays at three,
-so settings lives here.
+The per-tab header: the title, a right-aligned meta line, and the gear.
+Settings lives here so the tab bar can stay at three.
+
+`safe-top` already carries the header's top padding — do not add a `pt-*`
+alongside it, they collide.
 */
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useSheet } from '@/composables/useSheet'
 
 defineProps<{
-	kicker: string
 	title: string
 	meta?: string
 }>()
@@ -17,17 +18,21 @@ const { open } = useSheet()
 </script>
 
 <template>
-	<header class="safe-top flex items-end justify-between gap-2.5 px-4 pt-4 pb-2">
-		<div class="min-w-0">
-			<p class="text-micro tracking-[0.14em] text-accent uppercase">{{ kicker }}</p>
-			<h1 class="mt-0.5 text-page-title tracking-[-0.01em]">{{ title }}</h1>
-		</div>
+	<header class="safe-top flex items-center justify-between gap-3 px-4 pb-3">
+		<h1 class="min-w-0 flex-1 text-page-title leading-none tracking-[-0.01em]">{{ title }}</h1>
 
-		<div class="flex flex-none items-center gap-1">
-			<p v-if="meta" class="pb-1.5 text-right text-meta tracking-[0.06em] text-subtle uppercase">
-				{{ meta }}
-			</p>
-			<BaseButton variant="ghost" icon aria-label="Settings" @click="open('settings')">
+		<div class="flex flex-none items-center gap-2">
+			<p v-if="meta" class="text-meta tracking-[0.06em] text-subtle uppercase">{{ meta }}</p>
+
+			<!-- Negative margin keeps the 44px tap target while letting the icon sit
+			     optically flush with the page margin. -->
+			<BaseButton
+				variant="ghost"
+				icon
+				class="-mr-2.5 text-subtle"
+				aria-label="Settings"
+				@click="open('settings')"
+			>
 				<FaIcon icon="gear" />
 			</BaseButton>
 		</div>

@@ -65,10 +65,21 @@ Base element styles. Everything here is a global default, not a component.
 	}
 }
 
-@utility safe-bottom {
-	padding-bottom: env(safe-area-inset-bottom);
+/*
+Safe-area padding.
+
+These MUST combine the device inset and the layout's own padding into a single
+declaration. Pairing `safe-top` with `pt-4` puts two padding-top utilities on
+one element, and the later one in the generated stylesheet silently wins — which
+is how the header lost its top padding entirely and sat under the status bar.
+
+So: use these alone, and tune the non-inset part with the custom property rather
+than by adding a second padding utility.
+*/
+@utility safe-top {
+	padding-top: calc(env(safe-area-inset-top) + var(--safe-top-base, 1.25rem));
 }
 
-@utility safe-top {
-	padding-top: env(safe-area-inset-top);
+@utility safe-bottom {
+	padding-bottom: calc(env(safe-area-inset-bottom) + var(--safe-bottom-base, 0.75rem));
 }

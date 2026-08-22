@@ -50,7 +50,7 @@ const textRoles = [
 </script>
 
 <template>
-	<PageHeader kicker="Dev only" title="Styleguide" meta="tuning surface" />
+	<PageHeader title="Styleguide" meta="tuning surface" />
 
 	<div class="flex flex-col gap-8 px-4 pb-12">
 		<section>

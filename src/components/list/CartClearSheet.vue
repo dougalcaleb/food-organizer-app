@@ -54,7 +54,7 @@ async function confirm() {
 			</ul>
 		</div>
 
-		<footer class="safe-bottom flex flex-none gap-2 border-t border-border px-4 py-3">
+		<footer class="safe-bottom flex flex-none gap-2 border-t border-border px-4 pt-3">
 			<BaseButton class="flex-1" @click="open = false">Cancel</BaseButton>
 			<BaseButton variant="primary" class="flex-1" @click="confirm">Finish trip</BaseButton>
 		</footer>

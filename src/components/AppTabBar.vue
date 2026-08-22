@@ -1,7 +1,10 @@
 <script setup lang="ts">
 /*
-The three-tab bottom bar. Deliberately just the label and its active
-indicator — no live counts.
+The three-tab bottom bar. Label plus an active indicator riding the top border —
+no counts.
+
+`safe-bottom` carries the bar's bottom padding; the tabs supply their own
+vertical padding, so the two never touch the same property.
 */
 const tabs = [
 	{ to: '/list', label: 'List' },
@@ -11,16 +14,18 @@ const tabs = [
 </script>
 
 <template>
-	<nav class="safe-bottom z-chrome flex flex-none border-t border-border bg-surface px-1.5">
+	<nav
+		class="safe-bottom z-chrome flex flex-none border-t border-border bg-surface px-2 [--safe-bottom-base:0.5rem]"
+	>
 		<RouterLink
 			v-for="tab in tabs"
 			:key="tab.to"
 			v-slot="{ isActive }"
 			:to="tab.to"
-			class="flex flex-1 flex-col items-center gap-2 pt-3 pb-2"
+			class="relative flex flex-1 items-center justify-center py-3.5"
 		>
 			<span
-				class="h-0.5 w-[22px] rounded-full transition-colors"
+				class="absolute inset-x-0 top-0 mx-auto h-0.5 w-8 rounded-b-full transition-colors"
 				:class="isActive ? 'bg-accent' : 'bg-transparent'"
 			/>
 			<span

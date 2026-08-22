@@ -58,7 +58,7 @@ async function addToPlan(id: string) {
 </script>
 
 <template>
-	<PageHeader kicker="Next week or so" title="The plan" :meta="meta" />
+	<PageHeader title="The plan" :meta="meta" />
 
 	<div class="flex flex-col gap-6 px-4 pt-2 pb-6">
 		<section class="flex flex-col gap-2.5">

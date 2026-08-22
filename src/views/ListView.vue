@@ -46,7 +46,7 @@ const confirmOpen = ref(false)
 </script>
 
 <template>
-	<PageHeader kicker="What to buy" title="Shopping list" :meta="meta" />
+	<PageHeader title="Shopping list" :meta="meta" />
 
 	<div class="px-4 pt-2 pb-3">
 		<SegControl v-model="list.view" :options="views" />

@@ -82,7 +82,7 @@ const meta = computed(() => `${filtered.value.length} of ${meals.meals.length}`)
 </script>
 
 <template>
-	<PageHeader kicker="Everything I have ever liked" title="Meal ideas" :meta="meta" />
+	<PageHeader title="Meal ideas" :meta="meta" />
 
 	<div class="flex flex-col gap-2.5 px-4 pt-2 pb-3">
 		<div class="flex gap-2">
