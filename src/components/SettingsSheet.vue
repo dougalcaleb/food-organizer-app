@@ -173,7 +173,13 @@ async function resetToSeed() {
 
 				<p v-if="restoreError" class="mt-2 text-meta text-danger">{{ restoreError }}</p>
 
-				<p class="mt-3 text-meta text-subtle">
+				<!--
+					Height is reserved because this resolves after mount, while the sheet
+					is still animating in. A bottom-anchored panel that grows mid-flight
+					shoves everything above it upward — the shift was the whole reason
+					the settings sheet felt unsettled on open.
+				-->
+				<p class="mt-3 min-h-[2.9rem] text-meta text-subtle">
 					<template v-if="persisted === true">
 						Storage is marked persistent{{ usage ? ` · ${usage} used` : '' }}.
 					</template>

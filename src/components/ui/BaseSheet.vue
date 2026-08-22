@@ -2,9 +2,11 @@
 /*
 Bottom sheet — the meal detail, meal editor, and settings all use it.
 
-Per the handoff this is the only thing in the app that animates: the backdrop
-fades in over 150ms, the sheet rises 30px over 200ms. Both are suppressed under
-prefers-reduced-motion.
+Per the handoff this is the only thing in the app that animates. The handoff's
+timings (backdrop 150ms, sheet rising 30px over 200ms, no fade) read as abrupt
+on a phone — a solid panel snapping up from the edge. It now fades as it rises,
+over a slightly longer decelerating curve, which reads as arriving rather than
+appearing. Both are suppressed under prefers-reduced-motion.
 */
 import { onBeforeUnmount, onMounted } from 'vue'
 
@@ -47,7 +49,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 <style scoped>
 @keyframes sheet-up {
 	from {
-		transform: translateY(30px);
+		opacity: 0;
+		transform: translateY(24px);
 	}
 }
 
@@ -58,11 +61,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 }
 
 .animate-sheet {
-	animation: sheet-up 200ms ease-out;
+	/* Decelerating, so most of the travel is over before the panel settles. */
+	animation: sheet-up 280ms cubic-bezier(0.22, 0.8, 0.36, 1);
 }
 
 .animate-backdrop {
-	animation: backdrop-in 150ms ease-out;
+	/* Runs slightly longer than the sheet so the dim does not land first. */
+	animation: backdrop-in 300ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
