@@ -11,7 +11,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseChip from '@/components/ui/BaseChip.vue'
 import MealCard from '@/components/meal/MealCard.vue'
 import { useSheet } from '@/composables/useSheet'
-import { weeksSince } from '@/lib/dates'
+import { recentFirst, staleFirst } from '@/lib/dates'
 import { useMealsStore } from '@/stores/meals'
 import { useSettingsStore } from '@/stores/settings'
 import type { IdeaSort } from '@/types'
@@ -59,11 +59,10 @@ const filtered = computed(() => {
 	const sorted = [...matches]
 
 	if (sort.value === 'stale') {
-		// Never-made meals report Infinity, so they surface first — which is the
-		// entire point of jotting an idea down.
-		sorted.sort((a, b) => weeksSince(b.lastMadeAt) - weeksSince(a.lastMadeAt))
+		// Never-made meals lead — which is the entire point of jotting an idea down.
+		sorted.sort(staleFirst)
 	} else if (sort.value === 'recent') {
-		sorted.sort((a, b) => weeksSince(a.lastMadeAt) - weeksSince(b.lastMadeAt))
+		sorted.sort(recentFirst)
 	} else {
 		sorted.sort((a, b) => a.name.localeCompare(b.name))
 	}

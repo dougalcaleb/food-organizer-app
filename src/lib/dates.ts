@@ -23,3 +23,35 @@ export function weekLabel(weeks: number): string {
 export function lastMadeLabel(lastMadeAt: number | null, now?: number): string {
 	return weekLabel(weeksSince(lastMadeAt, now))
 }
+
+/*
+Comparators for meal staleness.
+
+These sort on `lastMadeAt` directly rather than on derived week counts, because
+a never-made meal reports Infinity weeks and `Infinity - Infinity` is NaN — an
+invalid comparator result, and not a rare case: jotting down name-only ideas is
+a normal thing to do, so several never-made meals is the expected state.
+
+Ties break on name so the order is stable and predictable rather than
+dependent on insertion order.
+*/
+
+interface HasLastMade {
+	name: string
+	lastMadeAt: number | null
+}
+
+/** Most stale first. Never-made meals lead, since those are the most forgotten. */
+export function staleFirst(a: HasLastMade, b: HasLastMade): number {
+	if (a.lastMadeAt === b.lastMadeAt) return a.name.localeCompare(b.name)
+	if (a.lastMadeAt === null) return -1
+	if (b.lastMadeAt === null) return 1
+
+	// An older timestamp means longer since it was made.
+	return a.lastMadeAt - b.lastMadeAt
+}
+
+/** Most recently made first. Never-made meals sort last. */
+export function recentFirst(a: HasLastMade, b: HasLastMade): number {
+	return -staleFirst(a, b)
+}
