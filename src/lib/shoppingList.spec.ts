@@ -250,3 +250,52 @@ describe('groupItems — all', () => {
 		expect(groupItems([], 'all', [], [])).toEqual([])
 	})
 })
+
+describe('forgiving entry', () => {
+	it('accepts an ingredient that is only a name', () => {
+		const meals = [meal('a', 'Curry', [{ name: 'olive oil' }])]
+		const items = buildItems(meals, ['a'], [])
+
+		expect(items).toHaveLength(1)
+		expect(items[0].name).toBe('olive oil')
+		// No quantity to show, so the row shows none rather than "0".
+		expect(items[0].qty).toBe('')
+	})
+
+	it('treats a missing store as wherever', () => {
+		const meals = [meal('a', 'Curry', [{ name: 'olive oil' }])]
+		expect(buildItems(meals, ['a'], [])[0].store).toBe('wherever')
+	})
+
+	it('renders a unit without an amount as the bare unit', () => {
+		const meals = [meal('a', 'Curry', [{ name: 'coconut milk', unit: 'cans' }])]
+		expect(buildItems(meals, ['a'], [])[0].qty).toBe('cans')
+	})
+
+	it('lets a quantified meal win over an unquantified one when merging', () => {
+		const meals = [
+			meal('a', 'Curry', [ing('coconut milk', 2, 'cans')]),
+			meal('b', 'Chili', [{ name: 'coconut milk' }]),
+		]
+
+		const items = buildItems(meals, ['a', 'b'], [])
+		expect(items).toHaveLength(1)
+		// The vague entry adds nothing to the number but still links its meal.
+		expect(items[0].qty).toBe('2 cans')
+		expect(items[0].meals).toEqual(['Curry', 'Chili'])
+	})
+
+	it('still groups an unquantified ingredient correctly', () => {
+		const meals = [meal('a', 'Curry', [{ name: 'olive oil' }])]
+		const groups = groupItems(buildItems(meals, ['a'], []), 'store', meals, ['a'])
+
+		expect(groups.map((g) => g.title)).toEqual(['Wherever'])
+		expect(groups[0].items[0].meta).toBe('Curry')
+	})
+
+	it('handles a meal with no ingredients at all', () => {
+		const meals = [meal('a', 'Some thai thing', [])]
+		expect(buildItems(meals, ['a'], [])).toEqual([])
+		expect(groupItems([], 'meal', meals, ['a'])).toEqual([])
+	})
+})

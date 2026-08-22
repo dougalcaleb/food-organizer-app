@@ -85,8 +85,8 @@ export function buildItems(
 		{
 			key: string
 			name: string
-			parts: { amount: number; unit: string }[]
-			perMealParts: Record<string, { amount: number; unit: string }[]>
+			parts: { amount?: number; unit?: string }[]
+			perMealParts: Record<string, { amount?: number; unit?: string }[]>
 			stores: Set<Store>
 			meals: string[]
 			mealIds: string[]
@@ -120,7 +120,8 @@ export function buildItems(
 			// A meal listing the same ingredient twice (oil in two steps) still
 			// gets one combined per-meal amount, so accumulate and sum at the end.
 			;(entry.perMealParts[mealId] ??= []).push(part)
-			entry.stores.add(ing.store)
+			// A missing store means no usual place to buy it.
+			entry.stores.add(ing.store ?? 'wherever')
 
 			if (!entry.mealIds.includes(mealId)) {
 				entry.mealIds.push(mealId)

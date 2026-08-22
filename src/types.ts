@@ -14,12 +14,18 @@ export const STORE_LABELS: Record<Store, string> = {
 
 export const STORES = Object.keys(STORE_LABELS) as Store[]
 
+/**
+ * Only `name` is required. Jotting "olive oil" with no amount and no store is a
+ * legitimate entry — the point of the app is capturing an idea before it is
+ * gone, not filling in a form. Anything missing simply is not displayed, and a
+ * missing store is treated as `wherever`.
+ */
 export interface Ingredient {
 	name: string
-	amount: number
-	/** May be empty for countable things ("3 bell pepper"). */
-	unit: string
-	store: Store
+	amount?: number
+	/** Empty or absent for countable things ("3 bell pepper"). */
+	unit?: string
+	store?: Store
 }
 
 export interface Meal {
