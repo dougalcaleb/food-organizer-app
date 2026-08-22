@@ -7,7 +7,7 @@ Ported from the design prototype's `buildItems` / `groups`, with one deliberate
 change: items merge on a normalized name (trimmed, lowercased) rather than on
 an exact string match, so "Bell Pepper" and "bell pepper" are one line.
 */
-import type { ExtraItem, Meal, ShopView, Store } from '@/types'
+import type { ExtraItem, ExtraKind, Meal, ShopView, Store } from '@/types'
 import { STORE_LABELS } from '@/types'
 import { sumQuantities } from './quantities'
 
@@ -33,6 +33,9 @@ export interface ListItem {
 	/** This meal's own contribution, for the by-meal view. */
 	perMeal: Record<string, string>
 	isExtra: boolean
+	/** Set for extras only, so the UI can act on the underlying record. */
+	extraId?: string
+	extraKind?: ExtraKind
 }
 
 export interface ListGroup {
@@ -139,7 +142,12 @@ export function buildItems(
 		isExtra: false,
 	}))
 
+	// Only extras currently on the list. A staple resting on the shelf is not
+	// something to buy, so it must not reach the shopping list at all — filtered
+	// here rather than at the call site so nothing can forget.
 	for (const extra of extras) {
+		if (!extra.active) continue
+
 		items.push({
 			key: extraKey(extra.id),
 			name: extra.name,
@@ -149,6 +157,8 @@ export function buildItems(
 			mealIds: [],
 			perMeal: {},
 			isExtra: true,
+			extraId: extra.id,
+			extraKind: extra.kind,
 		})
 	}
 

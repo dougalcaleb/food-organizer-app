@@ -2,7 +2,7 @@ import { bulkPutMeals } from '@/db/repositories/meals'
 import { addToPlan } from '@/db/repositories/plan'
 import { putExtra } from '@/db/repositories/extras'
 import { db } from '@/db'
-import type { Ingredient, Meal } from '@/types'
+import type { ExtraItem, Ingredient, Meal } from '@/types'
 
 /*
 Sample data from the design prototype: 14 real meals with ingredients, stores,
@@ -276,6 +276,39 @@ export async function reseed(): Promise<void> {
 		await addToPlan(mealId)
 	}
 
-	await putExtra({ id: 'e1', name: 'paper towels', qty: '1 pack', store: 'costco', createdAt: now })
-	await putExtra({ id: 'e2', name: 'coffee beans', qty: '2 bags', store: 'either', createdAt: now })
+	// One genuine one-off, plus a shelf of staples — two already on the list, the
+	// rest resting, so the Staples shelf has something to demonstrate.
+	const extras: Omit<ExtraItem, 'createdAt'>[] = [
+		{
+			id: 'e1',
+			name: 'paper towels',
+			qty: '1 pack',
+			store: 'costco',
+			kind: 'oneoff',
+			active: true,
+		},
+		{
+			id: 'e2',
+			name: 'coffee beans',
+			qty: '2 bags',
+			store: 'either',
+			kind: 'staple',
+			active: true,
+		},
+		{ id: 'e3', name: 'milk', qty: '1 gal', store: 'either', kind: 'staple', active: false },
+		{ id: 'e4', name: 'butter', qty: '1 lb', store: 'costco', kind: 'staple', active: false },
+		{
+			id: 'e5',
+			name: 'sandwich bread',
+			qty: '1 loaf',
+			store: 'either',
+			kind: 'staple',
+			active: false,
+		},
+		{ id: 'e6', name: 'dish soap', qty: '1', store: 'walmart', kind: 'staple', active: false },
+	]
+
+	for (const extra of extras) {
+		await putExtra({ ...extra, createdAt: now })
+	}
 }

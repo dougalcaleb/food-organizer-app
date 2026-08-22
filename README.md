@@ -38,6 +38,22 @@ its own utilities.
 `/styleguide` (dev only) renders every component class in every state on one
 page — use it as the feedback loop when retuning.
 
+## Shopping list items
+
+Three kinds of line, with three different lifecycles:
+
+| Kind | Where it comes from | After a shopping trip |
+|---|---|---|
+| Ingredient | Derived from a planned meal | Unchecks — the meal is still planned |
+| One-off | Typed in once (paper towels) | Deleted |
+| Staple | Bought regularly (milk, butter) | Returns to the Staples shelf |
+
+Staples never have to be retyped: they rest on a shelf at the bottom of the
+List tab and are tapped onto the current list when needed. One-offs and staples
+share the `extras` table, distinguished by `kind`; `active` is what puts either
+on the current list. Clearing the cart confirms first and says what it will
+delete.
+
 ## Notes
 
 - **Fonts** are vendored latin-subset-only into `src/assets/fonts` and declared

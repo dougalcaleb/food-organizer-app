@@ -39,12 +39,26 @@ export interface Meal {
 	archived: boolean
 }
 
-/** A one-off shopping item, not tied to any meal. */
+/**
+ * Two kinds of shopping item that are not tied to any meal:
+ *
+ *   oneoff — bought once and done (paper towels). Deleted after the trip.
+ *   staple — bought regularly (milk, butter). Rests on the Staples shelf and
+ *            returns there after the trip, so it never has to be retyped.
+ */
+export type ExtraKind = 'oneoff' | 'staple'
+
 export interface ExtraItem {
 	id: string
 	name: string
 	qty: string
 	store: Store
+	kind: ExtraKind
+	/**
+	 * Whether this is on the current shopping list. One-offs are created active
+	 * and deleted once bought; staples toggle between the list and the shelf.
+	 */
+	active: boolean
 	createdAt: number
 }
 
@@ -93,7 +107,7 @@ export const DEFAULT_TAGS = [
 	'Middle Eastern',
 ]
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 export const DEFAULT_SETTINGS: Settings = {
 	id: 'app',

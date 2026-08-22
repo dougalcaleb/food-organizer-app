@@ -36,7 +36,7 @@ describe('seeding', () => {
 		expect(await seedIfEmpty()).toBe(true)
 		expect(await db.meals.count()).toBe(14)
 		expect(await db.plan.count()).toBe(3)
-		expect(await db.extras.count()).toBe(2)
+		expect(await db.extras.count()).toBe(6)
 	})
 
 	it('does not clobber existing data', async () => {
@@ -65,7 +65,7 @@ describe('hydration', () => {
 
 		expect(useMealsStore().meals).toHaveLength(14)
 		expect(usePlanStore().mealIds).toEqual(['curry', 'sausage', 'greek'])
-		expect(useListStore().extras).toHaveLength(2)
+		expect(useListStore().extras).toHaveLength(6)
 		expect(useSettingsStore().settings.staleWeeks).toBe(12)
 	})
 
@@ -80,9 +80,9 @@ describe('hydration', () => {
 
 		const list = useListStore()
 		expect(list.items.length).toBeGreaterThan(0)
-		// Both curry and greek salad want pita/peppers-ish overlap; at minimum the
-		// two seeded extras must be present as one-offs.
+		// Only the two active extras reach the list; the shelved staples do not.
 		expect(list.items.filter((i) => i.isExtra)).toHaveLength(2)
+		expect(list.shelvedStaples).toHaveLength(4)
 	})
 })
 
@@ -192,5 +192,110 @@ describe('backup', () => {
 	it('refuses a backup from a newer schema version', async () => {
 		const backup = { ...(await exportBackup()), schemaVersion: 99 }
 		await expect(restoreBackup(JSON.stringify(backup))).rejects.toThrow(/newer version/)
+	})
+})
+
+describe('staples and one-offs', () => {
+	it('keeps shelved staples off the shopping list', async () => {
+		await reseed()
+		await hydrateStores()
+
+		const names = useListStore().items.map((i) => i.name)
+		expect(names).toContain('coffee beans') // active staple
+		expect(names).not.toContain('milk') // shelved
+		expect(names).not.toContain('butter')
+	})
+
+	it('adds a shelved staple to the list without retyping it', async () => {
+		await reseed()
+		await hydrateStores()
+		const list = useListStore()
+
+		await list.setStapleActive('e3', true)
+
+		expect(list.items.map((i) => i.name)).toContain('milk')
+		expect(list.shelvedStaples.map((s) => s.id)).not.toContain('e3')
+	})
+
+	it('persists the shelf across a reload', async () => {
+		await reseed()
+		await hydrateStores()
+		await useListStore().setStapleActive('e3', true)
+
+		setActivePinia(createPinia())
+		await hydrateStores()
+
+		expect(useListStore().items.map((i) => i.name)).toContain('milk')
+	})
+})
+
+describe('clearing the cart', () => {
+	/** Check off one item of each kind, then report the plan. */
+	async function checkOneOfEach() {
+		await reseed()
+		await hydrateStores()
+		const list = useListStore()
+
+		const ingredient = list.openItems.find((i) => !i.isExtra)!
+		const oneOff = list.openItems.find((i) => i.extraKind === 'oneoff')!
+		const staple = list.openItems.find((i) => i.extraKind === 'staple')!
+
+		await list.toggle(ingredient.key)
+		await list.toggle(oneOff.key)
+		await list.toggle(staple.key)
+
+		return { list, ingredient, oneOff, staple }
+	}
+
+	it('describes what it will do before doing it', async () => {
+		const { list } = await checkOneOfEach()
+		const plan = list.cartClearPlan
+
+		expect(plan.oneOffsToDelete.map((i) => i.name)).toEqual(['paper towels'])
+		expect(plan.staplesToShelve.map((i) => i.name)).toEqual(['coffee beans'])
+		expect(plan.ingredientsToUncheck).toHaveLength(1)
+	})
+
+	it('deletes bought one-offs outright', async () => {
+		const { list, oneOff } = await checkOneOfEach()
+		await list.clearCart()
+
+		expect(list.extras.map((e) => e.id)).not.toContain(oneOff.extraId)
+		expect(await db.extras.get(oneOff.extraId!)).toBeUndefined()
+	})
+
+	it('returns bought staples to the shelf rather than deleting them', async () => {
+		const { list, staple } = await checkOneOfEach()
+		await list.clearCart()
+
+		expect(await db.extras.get(staple.extraId!)).toMatchObject({ active: false })
+		expect(list.shelvedStaples.map((s) => s.id)).toContain(staple.extraId)
+		expect(list.items.map((i) => i.name)).not.toContain('coffee beans')
+	})
+
+	it('only unchecks meal ingredients, since the meal is still planned', async () => {
+		const { list, ingredient } = await checkOneOfEach()
+		await list.clearCart()
+
+		expect(list.openItems.map((i) => i.key)).toContain(ingredient.key)
+		expect(list.doneItems).toHaveLength(0)
+	})
+
+	it('leaves unchecked items completely alone', async () => {
+		const { list } = await checkOneOfEach()
+		const openBefore = list.openItems.length
+		await list.clearCart()
+
+		// Of the three checked items only the ingredient comes back: the one-off
+		// was deleted and the staple went to the shelf.
+		expect(list.openItems).toHaveLength(openBefore + 1)
+	})
+
+	it('uncheckAll is non-destructive', async () => {
+		const { list, oneOff } = await checkOneOfEach()
+		await list.uncheckAll()
+
+		expect(list.doneItems).toHaveLength(0)
+		expect(await db.extras.get(oneOff.extraId!)).toBeTruthy()
 	})
 })

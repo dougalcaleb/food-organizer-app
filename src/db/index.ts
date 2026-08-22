@@ -27,6 +27,30 @@ export class AppDatabase extends Dexie {
 			checked: 'key',
 			settings: 'id',
 		})
+
+		// v2 splits extras into one-offs and recurring staples. Everything that
+		// existed before was a one-off on the current list, which is exactly what
+		// the old single-kind behavior meant.
+		this.version(2)
+			.stores({
+				meals: 'id, name, lastMadeAt, archived, *tags',
+				// `active` is deliberately not indexed: IndexedDB has no boolean key
+				// type, so records would silently fall out of the index. The extras
+				// table is a few dozen rows — filter it in memory.
+				extras: 'id, createdAt, kind',
+				plan: 'mealId, sortIndex',
+				checked: 'key',
+				settings: 'id',
+			})
+			.upgrade((tx) =>
+				tx
+					.table<ExtraItem>('extras')
+					.toCollection()
+					.modify((extra) => {
+						extra.kind ??= 'oneoff'
+						extra.active ??= true
+					}),
+			)
 	}
 }
 

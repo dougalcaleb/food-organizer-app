@@ -25,8 +25,14 @@ function ing(
 	return { name, amount, unit, store }
 }
 
-function extra(id: string, name: string, qty: string, store: ExtraItem['store']): ExtraItem {
-	return { id, name, qty, store, createdAt: 0 }
+function extra(
+	id: string,
+	name: string,
+	qty: string,
+	store: ExtraItem['store'],
+	overrides: Partial<ExtraItem> = {},
+): ExtraItem {
+	return { id, name, qty, store, kind: 'oneoff', active: true, createdAt: 0, ...overrides }
 }
 
 const find = (items: ReturnType<typeof buildItems>, name: string) =>

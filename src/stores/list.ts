@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import * as checkedRepo from '@/db/repositories/checked'
 import * as extrasRepo from '@/db/repositories/extras'
 import { buildItems, groupItems } from '@/lib/shoppingList'
-import type { ExtraItem, ShopView, Store } from '@/types'
+import type { ExtraItem, ExtraKind, ShopView, Store } from '@/types'
 import { useMealsStore } from './meals'
 import { usePlanStore } from './plan'
 import { useSettingsStore } from './settings'
@@ -36,6 +36,17 @@ export const useListStore = defineStore('list', () => {
 		groupItems(openItems.value, view.value, useMealsStore().meals, usePlanStore().mealIds),
 	)
 
+	/** Staples resting off the list — the shelf you tap to add from. */
+	const shelvedStaples = computed(() =>
+		extras.value
+			.filter((e) => e.kind === 'staple' && !e.active)
+			.sort((a, b) => a.name.localeCompare(b.name)),
+	)
+
+	const allStaples = computed(() =>
+		extras.value.filter((e) => e.kind === 'staple').sort((a, b) => a.name.localeCompare(b.name)),
+	)
+
 	async function hydrate() {
 		const [storedExtras, keys] = await Promise.all([
 			extrasRepo.allExtras(),
@@ -49,8 +60,7 @@ export const useListStore = defineStore('list', () => {
 	async function toggle(key: string) {
 		const next = !checked.value.has(key)
 
-		// Set mutation is reactive in Vue 3, but reassign so computeds relying on
-		// identity also invalidate.
+		// Reassign rather than mutate, so computeds relying on identity invalidate.
 		const updated = new Set(checked.value)
 		if (next) updated.add(key)
 		else updated.delete(key)
@@ -59,13 +69,13 @@ export const useListStore = defineStore('list', () => {
 		await checkedRepo.setChecked(key, next)
 	}
 
-	/** Empties the cart — used after a shopping trip. */
-	async function clearChecked() {
-		checked.value = new Set()
-		await checkedRepo.clearChecked()
-	}
+	/* ── Extras ───────────────────────────────────────────────────────────── */
 
-	async function addExtra(name: string, store: Store, qty = '1') {
+	async function addExtra(
+		name: string,
+		store: Store,
+		{ kind = 'oneoff' as ExtraKind, qty = '1', active = true } = {},
+	): Promise<ExtraItem | undefined> {
 		const trimmed = name.trim()
 		if (!trimmed) return
 
@@ -74,16 +84,84 @@ export const useListStore = defineStore('list', () => {
 			name: trimmed,
 			qty,
 			store,
+			kind,
+			active,
 			createdAt: Date.now(),
 		}
 
 		extras.value.push(extra)
 		await extrasRepo.putExtra(extra)
+		return extra
+	}
+
+	async function updateExtra(id: string, patch: Partial<Omit<ExtraItem, 'id' | 'createdAt'>>) {
+		const existing = extras.value.find((e) => e.id === id)
+		if (!existing) return
+
+		const updated = { ...existing, ...patch }
+		extras.value.splice(extras.value.indexOf(existing), 1, updated)
+		await extrasRepo.putExtra(updated)
 	}
 
 	async function removeExtra(id: string) {
 		extras.value = extras.value.filter((e) => e.id !== id)
 		await extrasRepo.deleteExtra(id)
+	}
+
+	/** Move a shelved staple onto this week's list, or send it back. */
+	async function setStapleActive(id: string, active: boolean) {
+		await updateExtra(id, { active })
+	}
+
+	/* ── Clearing the cart ────────────────────────────────────────────────── */
+
+	/**
+	 * What clearing the cart would do, so the confirm dialog can spell it out
+	 * before anything is destroyed.
+	 *
+	 * The three kinds of line have genuinely different lifecycles: a bought
+	 * one-off is finished with, a staple goes back to the shelf until it is
+	 * needed again, and a meal ingredient just unchecks because the meal is
+	 * still planned.
+	 */
+	const cartClearPlan = computed(() => {
+		const done = doneItems.value
+
+		const oneOffsToDelete = done.filter((i) => i.extraKind === 'oneoff' && i.extraId)
+		const staplesToShelve = done.filter((i) => i.extraKind === 'staple' && i.extraId)
+		const ingredientsToUncheck = done.filter((i) => !i.isExtra)
+
+		return { oneOffsToDelete, staplesToShelve, ingredientsToUncheck }
+	})
+
+	/**
+	 * Finish a shopping trip: delete bought one-offs, return bought staples to
+	 * the shelf, and uncheck everything else. Callers are expected to confirm
+	 * first — see `cartClearPlan`.
+	 */
+	async function clearCart() {
+		const { oneOffsToDelete, staplesToShelve } = cartClearPlan.value
+
+		const deleteIds = oneOffsToDelete.map((i) => i.extraId!)
+		const shelveIds = staplesToShelve.map((i) => i.extraId!)
+
+		extras.value = extras.value
+			.filter((e) => !deleteIds.includes(e.id))
+			.map((e) => (shelveIds.includes(e.id) ? { ...e, active: false } : e))
+
+		checked.value = new Set()
+
+		await Promise.all([
+			extrasRepo.deleteExtras(deleteIds),
+			extrasRepo.setExtrasActive(shelveIds, false),
+			checkedRepo.clearChecked(),
+		])
+	}
+
+	/** Uncheck everything without deleting or shelving anything. */
+	async function uncheckAll() {
+		checked.value = new Set()
+		await checkedRepo.clearChecked()
 	}
 
 	return {
@@ -94,10 +172,16 @@ export const useListStore = defineStore('list', () => {
 		openItems,
 		doneItems,
 		groups,
+		shelvedStaples,
+		allStaples,
+		cartClearPlan,
 		hydrate,
 		toggle,
-		clearChecked,
 		addExtra,
+		updateExtra,
 		removeExtra,
+		setStapleActive,
+		clearCart,
+		uncheckAll,
 	}
 })
