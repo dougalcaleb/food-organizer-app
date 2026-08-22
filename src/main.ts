@@ -1,24 +1,36 @@
 import { createApp } from 'vue'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 
 import '@/styles/main.css'
 import '@/plugins/fontawesome'
 import { router } from '@/router'
 import { requestPersistentStorage } from '@/lib/storage'
+import { hydrateStores } from '@/stores'
 import App from '@/App.vue'
 
 async function bootstrap() {
 	// Ask the browser not to evict our IndexedDB under storage pressure. This is
-	// the only copy of the user's data, so it matters; it is also best-effort and
-	// unsupported in some browsers, hence the guard inside.
+	// the user's only copy of their data, so it matters — but it is best-effort
+	// and unsupported in some browsers, so nothing waits on it.
 	void requestPersistentStorage()
 
-	// TODO(step 3): hydrate the Pinia stores from Dexie here, awaited, so the
-	// first paint already has real data instead of flashing empty states.
+	const pinia = createPinia()
+	// Explicit, because the stores below are used before any component mounts.
+	setActivePinia(pinia)
+
+	// Dev builds start from the design prototype's 14 sample meals so there is
+	// something real on screen; production starts empty on purpose.
+	if (import.meta.env.DEV) {
+		const { seedIfEmpty } = await import('@/db/seed')
+		await seedIfEmpty()
+	}
+
+	// Awaited, so the first paint has real data rather than flashing empty states.
+	await hydrateStores()
 
 	const app = createApp(App)
-	app.use(createPinia())
+	app.use(pinia)
 	app.use(router)
 	app.component('FaIcon', FontAwesomeIcon)
 
