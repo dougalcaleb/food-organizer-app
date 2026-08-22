@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /*
-The three-tab bottom bar. Counts are placeholders until the stores land in
-step 3 — the shape (indicator bar / label / live count) is what matters here.
+The three-tab bottom bar. Deliberately just the label and its active
+indicator — no live counts.
 */
 const tabs = [
-	{ to: '/list', label: 'List', count: '0 items' },
-	{ to: '/ideas', label: 'Ideas', count: '0 saved' },
-	{ to: '/plan', label: 'Plan', count: '0 meals' },
+	{ to: '/list', label: 'List' },
+	{ to: '/ideas', label: 'Ideas' },
+	{ to: '/plan', label: 'Plan' },
 ]
 </script>
 
@@ -17,7 +17,7 @@ const tabs = [
 			:key="tab.to"
 			v-slot="{ isActive }"
 			:to="tab.to"
-			class="flex flex-1 flex-col items-center gap-1.5 pt-3 pb-1.5"
+			class="flex flex-1 flex-col items-center gap-2 pt-3 pb-2"
 		>
 			<span
 				class="h-0.5 w-[22px] rounded-full transition-colors"
@@ -28,12 +28,6 @@ const tabs = [
 				:class="isActive ? 'text-content' : 'text-subtle'"
 			>
 				{{ tab.label }}
-			</span>
-			<span
-				class="text-micro tracking-[0.04em] transition-colors"
-				:class="isActive ? 'text-accent' : 'text-faint'"
-			>
-				{{ tab.count }}
 			</span>
 		</RouterLink>
 	</nav>

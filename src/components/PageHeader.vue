@@ -4,11 +4,16 @@ The per-tab header from the handoff: an accent kicker, the big title, and a
 right-aligned meta line. The gear opens settings — the tab bar stays at three,
 so settings lives here.
 */
+import BaseButton from '@/components/ui/BaseButton.vue'
+import { useSheet } from '@/composables/useSheet'
+
 defineProps<{
 	kicker: string
 	title: string
 	meta?: string
 }>()
+
+const { open } = useSheet()
 </script>
 
 <template>
@@ -22,9 +27,9 @@ defineProps<{
 			<p v-if="meta" class="pb-1.5 text-right text-meta tracking-[0.06em] text-subtle uppercase">
 				{{ meta }}
 			</p>
-			<button type="button" class="btn btn-ghost btn-icon text-subtle" aria-label="Settings">
+			<BaseButton variant="ghost" icon aria-label="Settings" @click="open('settings')">
 				<FaIcon icon="gear" />
-			</button>
+			</BaseButton>
 		</div>
 	</header>
 </template>

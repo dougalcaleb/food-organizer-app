@@ -3,6 +3,7 @@
 The app shell. Fixed header, one scrolling content area, fixed tab bar — the
 handoff is explicit that vertical scroll lives in exactly one container.
 */
+import AppSheets from '@/components/AppSheets.vue'
 import AppTabBar from '@/components/AppTabBar.vue'
 </script>
 
@@ -13,5 +14,6 @@ import AppTabBar from '@/components/AppTabBar.vue'
 		</main>
 
 		<AppTabBar />
+		<AppSheets />
 	</div>
 </template>
