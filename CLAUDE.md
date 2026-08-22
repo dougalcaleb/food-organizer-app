@@ -23,15 +23,15 @@ structure, not its palette.
 
 ## Commands
 
-| | |
-|---|---|
-| `npm run dev` | Dev server. `-- --host` to reach it from a phone on the LAN. |
-| `npm run build` | Typecheck, then production build. |
-| `npm run test` | Full suite. |
-| `npm run test:watch` | Watch mode. |
-| `npx vitest run src/lib/dates.spec.ts` | A single test file. |
-| `npx vitest run -t 'never-made'` | Tests matching a name. |
-| `npm run typecheck` / `npm run lint` / `npm run format` | |
+|                                                         |                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| `npm run dev`                                           | Dev server. `-- --host` to reach it from a phone on the LAN. |
+| `npm run build`                                         | Typecheck, then production build.                            |
+| `npm run test`                                          | Full suite.                                                  |
+| `npm run test:watch`                                    | Watch mode.                                                  |
+| `npx vitest run src/lib/dates.spec.ts`                  | A single test file.                                          |
+| `npx vitest run -t 'never-made'`                        | Tests matching a name.                                       |
+| `npm run typecheck` / `npm run lint` / `npm run format` |                                                              |
 
 ## Architecture
 
@@ -41,7 +41,7 @@ load-bearing logic in the app and has the most tests. Never add a "shopping
 list" table.
 
 **Write-through repositories.** Store actions call a `db/repositories/*`
-function that writes the one changed record. Do *not* deep-watch stores and
+function that writes the one changed record. Do _not_ deep-watch stores and
 rewrite the DB — that races on rapid check-offs and hides the write path.
 Hydration is a single read of all tables in `main.ts`, awaited before
 `app.mount()`, so the first paint has real data.
@@ -55,8 +55,8 @@ single mount point. **Views must never mount a sheet themselves.**
 SPA rewrite.
 
 **Three-layer styles** in `src/styles/`, and this is the whole point of the
-setup: `primitives.css` (raw ramps — what colors *exist*) →
-`theme.css` (semantic roles — what they *mean*, **the tuning surface**) →
+setup: `primitives.css` (raw ramps — what colors _exist_) →
+`theme.css` (semantic roles — what they _mean_, **the tuning surface**) →
 `components.css` (`.btn`, `.chip`, `.seg`, `.card`, `.list-row`). Components
 reference roles (`bg-surface`, `text-muted`, `rounded-card`), **never
 primitives**. Retuning the look should mean editing `theme.css` alone. Softness
@@ -73,23 +73,23 @@ When a view starts making a product decision, extract it here.
 **Only `name` is ever required.** Not on a meal, not on an ingredient, not on a
 one-off. The user's stated priority is that friction stops ideas being written
 down at all. `{ name: 'that thai place thing' }` is a complete valid meal.
-Absent fields are *omitted*, not stored as `undefined` or rendered as `0`.
+Absent fields are _omitted_, not stored as `undefined` or rendered as `0`.
 
 **Three kinds of shopping line, three lifecycles.** Getting this wrong destroys
 data:
 
-| Kind | After a trip (`clearCart`) |
-|---|---|
-| Meal ingredient | Unchecked — the meal is still planned |
-| One-off (`kind: 'oneoff'`) | **Deleted** |
-| Staple (`kind: 'staple'`) | Returned to the shelf (`active: false`) |
+| Kind                       | After a trip (`clearCart`)              |
+| -------------------------- | --------------------------------------- |
+| Meal ingredient            | Unchecked — the meal is still planned   |
+| One-off (`kind: 'oneoff'`) | **Deleted**                             |
+| Staple (`kind: 'staple'`)  | Returned to the shelf (`active: false`) |
 
 `active` is what puts an extra on the current list; `buildItems` filters on it
 itself so no caller can forget. Clearing the cart is destructive, so the store
 exposes `cartClearPlan` and the UI confirms first.
 
 **"Made it" is the only thing that records history.** It drops the meal from the
-plan *and* stamps `lastMadeAt`. Plain "Remove" must touch neither — changing
+plan _and_ stamps `lastMadeAt`. Plain "Remove" must touch neither — changing
 your mind about the week should not make a meal look freshly eaten.
 
 **Never-made meals are maximally stale.** `lastMadeAt: null` →
@@ -113,7 +113,7 @@ Every write goes through `toPlain()` in `db/plain.ts`.
 
 **Never sort on derived week counts.** `weeksSince` returns `Infinity` for
 never-made meals, so `weeksSince(b) - weeksSince(a)` yields `NaN` for two of
-them — an invalid comparator, and *not* a rare case. Use `staleFirst` /
+them — an invalid comparator, and _not_ a rare case. Use `staleFirst` /
 `recentFirst` from `lib/dates.ts`, which compare `lastMadeAt` directly.
 
 **Booleans cannot be IndexedDB keys.** Indexing a boolean field silently drops
@@ -122,8 +122,8 @@ those records from the index. `active` is deliberately unindexed in
 
 **A runtime guard does not remove a dynamic import from the bundle.** A `v-if`
 around a button whose handler does `await import('@/db/seed')` still ships the
-seed data to production. The `import.meta.env.DEV` check must wrap the *import
-itself* so Rollup can drop the block. After touching anything dev-only, verify:
+seed data to production. The `import.meta.env.DEV` check must wrap the _import
+itself_ so Rollup can drop the block. After touching anything dev-only, verify:
 `ls dist/assets/ | grep -i seed` must come back empty.
 
 **Every name in `SHEET_NAMES` needs a component in `AppSheets.vue`.** A missing
@@ -141,14 +141,15 @@ upgrade path.
 
 ## Conventions
 
-- **Tabs for indentation**, single quotes, no semicolons (Prettier).
+- **Tabs for indentation**, single quotes, no semicolons (Prettier). `npm run
+format` covers the whole repo, not just `src/`.
 - **`src/styles/` is Prettier-ignored** — the token files are aligned columns
   that read as tables, and Prettier collapses them.
 - Tests are colocated as `*.spec.ts` next to what they test.
 - Icons are registered one at a time in `plugins/fontawesome.ts` so unused ones
   tree-shake; `FaIcon` is globally registered.
 - Fonts are vendored latin-subset-only into `src/assets/fonts` and referenced by
-  *relative* path, so Vite rebases them onto the GitHub Pages base. Absolute
+  _relative_ path, so Vite rebases them onto the GitHub Pages base. Absolute
   `/fonts/…` URLs would 404 in production.
 - Seeding is dev-only; production starts empty, so empty states are what a real
   new install sees. Keep them good.

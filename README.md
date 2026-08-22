@@ -8,15 +8,15 @@ of options, not a per-day schedule. Data lives in IndexedDB on the device.
 
 ## Commands
 
-| | |
-|---|---|
-| `npm run dev` | Dev server. Add `-- --host` to reach it from a phone on the same network. |
-| `npm run build` | Typecheck, then production build to `dist/`. |
-| `npm run preview` | Serve the production build locally. |
-| `npm run test` | Unit tests (Vitest). |
-| `npm run typecheck` | `vue-tsc` only. |
-| `npm run lint` | ESLint with `--fix`. |
-| `npm run format` | Prettier over `src/`. |
+|                     |                                                                           |
+| ------------------- | ------------------------------------------------------------------------- |
+| `npm run dev`       | Dev server. Add `-- --host` to reach it from a phone on the same network. |
+| `npm run build`     | Typecheck, then production build to `dist/`.                              |
+| `npm run preview`   | Serve the production build locally.                                       |
+| `npm run test`      | Unit tests (Vitest).                                                      |
+| `npm run typecheck` | `vue-tsc` only.                                                           |
+| `npm run lint`      | ESLint with `--fix`.                                                      |
+| `npm run format`    | Prettier over `src/`.                                                     |
 
 ## Design language
 
@@ -24,9 +24,9 @@ The look is tuned from a token layer, not from components. Three layers, in
 `src/styles/`:
 
 1. **`primitives.css`** — raw values: the gray/teal/purple/green ramps, the two
-   font families. What colors *exist*. Rarely edited.
+   font families. What colors _exist_. Rarely edited.
 2. **`theme.css`** — semantic roles (`--color-surface`, `--color-accent`,
-   `--radius-card`) mapped onto primitives. What those colors *mean*. **This is
+   `--radius-card`) mapped onto primitives. What those colors _mean_. **This is
    the tuning surface** — retuning the whole app should mean editing this file.
 3. **`components.css`** — `.btn`, `.input`, `.chip`, `.seg`, `.card`,
    `.list-row`, built against the roles.
@@ -42,11 +42,11 @@ page — use it as the feedback loop when retuning.
 
 Three kinds of line, with three different lifecycles:
 
-| Kind | Where it comes from | After a shopping trip |
-|---|---|---|
-| Ingredient | Derived from a planned meal | Unchecks — the meal is still planned |
-| One-off | Typed in once (paper towels) | Deleted |
-| Staple | Bought regularly (milk, butter) | Returns to the Staples shelf |
+| Kind       | Where it comes from             | After a shopping trip                |
+| ---------- | ------------------------------- | ------------------------------------ |
+| Ingredient | Derived from a planned meal     | Unchecks — the meal is still planned |
+| One-off    | Typed in once (paper towels)    | Deleted                              |
+| Staple     | Bought regularly (milk, butter) | Returns to the Staples shelf         |
 
 Staples never have to be retyped: they rest on a shelf at the bottom of the
 List tab and are tapped onto the current list when needed. One-offs and staples
@@ -57,7 +57,7 @@ delete.
 ## Notes
 
 - **Fonts** are vendored latin-subset-only into `src/assets/fonts` and declared
-  in `styles/fonts.css`. They are referenced by *relative* path so Vite rebases
+  in `styles/fonts.css`. They are referenced by _relative_ path so Vite rebases
   them onto the GitHub Pages base path; absolute `/fonts/...` URLs would 404 in
   production.
 - **Routing** uses hash history, because GitHub Pages has no SPA rewrite.
