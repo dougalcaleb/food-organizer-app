@@ -1,0 +1,15 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.vite
+coverage
+*.tsbuildinfo
+
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Design handoff + scratch material, not part of the build.
+tmp

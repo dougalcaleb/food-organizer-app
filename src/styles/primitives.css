@@ -1,0 +1,101 @@
+/*
+Layer 1 — PRIMITIVES.
+
+Raw values, lifted from the project's baseline theme. These are nouns with no
+opinion about where they get used: a ramp of grays, a ramp of teals, the two
+font families. Nothing in the app should reference these directly — components
+reference the semantic roles in `theme.css`, which point here.
+
+Edit this file to change what colors *exist*. Edit `theme.css` to change what
+they *mean*.
+*/
+
+@theme {
+	--color-gray-0:   hsl(0, 0%, 3%);
+	--color-gray-1:   hsl(0, 0%, 10%);
+	--color-gray-2:   hsl(0, 0%, 12%);
+	--color-gray-3:   hsl(0, 0%, 16%);
+	--color-gray-4:   hsl(0, 0%, 19%);
+	--color-gray-5:   hsl(0, 0%, 24%);
+	--color-gray-6:   hsl(0, 0%, 39%);
+	--color-gray-7:   hsl(0, 0%, 52%);
+	--color-gray-8:   hsl(0, 0%, 70%);
+	--color-gray-9:   hsl(0, 0%, 80%);
+	--color-gray-10:  hsl(0, 0%, 90%);
+	--color-white-0:  hsl(0, 0%, 86%);
+	--color-white-1:  hsl(0, 0%, 98%);
+
+	--color-blue-0:   hsl(194, 100%, 27%);
+	--color-blue-1:   hsl(197, 100%, 36%);
+	--color-blue-2:   hsl(197, 100%, 50%);
+
+	--color-purple-0: hsl(268, 41%, 23%);
+	--color-purple-1: hsl(271, 41%, 28%);
+	--color-purple-2: hsl(267, 40%, 34%);
+	--color-purple-3: hsl(265, 40%, 39%);
+	--color-purple-4: hsl(271, 41%, 56%);
+	--color-purple-5: hsl(272, 41%, 70%);
+
+	--color-green-0:  #203525;
+	--color-green-1:  #29422f;
+	--color-green-2:  #354f3c;
+	--color-green-3:  #426046;
+	--color-green-4:  #5d7f66;
+	--color-green-5:  #5d7f66;
+	--color-green-6:  #769984;
+
+	--color-yellow-0: hsl(36, 98%, 52%);
+	--color-yellow-1: hsl(36, 99%, 56%);
+	--color-yellow-2: hsl(36, 99%, 64%);
+
+	--color-red-0:    #660042;
+	--color-red-1:    #9b0064;
+	--color-red-2:    #ce1864;
+	--color-red-3:    #cc4c62;
+	--color-red-4:    #d85e46;
+	--color-red-5:    #ed703e;
+
+	--color-teal-0:   #132438;
+	--color-teal-1:   #18414c;
+	--color-teal-2:   #275e67;
+	--color-teal-3:   #479093;
+	--color-teal-4:   #6dbcb0;
+	--color-teal-5:   #86f0da;
+	--color-teal-6:   #b4f8c8;
+	--color-cream:    #e4f9de;
+}
+
+/*
+Fonts are self-hosted via the @fontsource-variable packages (imported in
+main.ts) rather than @font-face'd against /fonts/*.woff2 — Vite fingerprints
+and rebases them, so they survive the GitHub Pages base path.
+*/
+@theme {
+	--font-main: 'Inter Variable', 'Inter', system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'Consolas', monospace;
+}
+
+/*
+Z-index scale
+
+Everything that stacks against something outside its own component uses one of
+these tokens (z-content, z-float, z-chrome, ...) instead of a bare z-10/z-20, so
+the global ordering is readable in one place. Bands, bottom to top:
+
+	1-9    page content — in-flow decoration and whatever has to sit over it
+	10     floating tiles
+	20     app chrome — the header and the tab bar
+	30-69  sheets and their backdrops
+	100    alerts, above everything
+
+Purely local stacking (children of an element that already makes a stacking
+context) can keep bare values; those never compete with anything on this scale.
+*/
+@theme {
+	--z-index-content:     1;
+	--z-index-content-top: 2;
+	--z-index-float:       10;
+	--z-index-chrome:      20;
+	--z-index-sheet:       40;
+	--z-index-alert:       100;
+}

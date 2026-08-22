@@ -1,0 +1,28 @@
+/*
+The single stylesheet entry point. Import order matters: Tailwind first, then
+the token layers (primitives -> semantic roles), then base elements, then
+component classes built on top of both.
+*/
+
+@import 'tailwindcss';
+
+@import './fonts.css';
+@import './primitives.css';
+@import './theme.css';
+@import './base.css';
+@import './components.css';
+
+/* Always apply hover styles rather than gating them behind a hover-capable
+   media query — the default v4 behavior suppresses them on touch, which also
+   suppresses them in desktop devtools' device emulation. */
+@custom-variant hover (&:hover);
+
+/*
+Tailwind safelists — classes built dynamically at runtime that the scanner
+can't see in source.
+https://stackoverflow.com/questions/79323991/how-is-it-possible-to-specify-a-safelist-in-tailwindcss-v4
+*/
+@source inline('h-{{10..20..2}}');
+@source inline('h-{{4..10}}');
+@source inline('w-{{4..20..2}}');
+@source inline('w-{{4..10}}');

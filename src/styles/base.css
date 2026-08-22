@@ -1,0 +1,74 @@
+/*
+Base element styles. Everything here is a global default, not a component.
+*/
+
+@layer base {
+	html {
+		background: var(--color-bg);
+		color-scheme: dark;
+	}
+
+	body {
+		margin: 0;
+		background: var(--color-bg);
+		color: var(--color-content);
+		font-family: var(--font-body);
+		font-size: 0.9375rem; /* 15px, per the handoff's base */
+		line-height: 1.55;
+		/* The app owns its own scrolling in one container; the document never
+		   scrolls, and rubber-banding the whole page would fight the tab bar. */
+		overscroll-behavior: none;
+		-webkit-font-smoothing: antialiased;
+	}
+
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		font-family: var(--font-heading);
+		font-weight: 600;
+		line-height: 1.15;
+		margin: 0;
+	}
+
+	/* Tap targets shouldn't flash the platform highlight; we style :active. */
+	* {
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	button {
+		font: inherit;
+		color: inherit;
+		cursor: pointer;
+	}
+
+	input,
+	textarea,
+	select {
+		font: inherit;
+		color: inherit;
+	}
+
+	:focus {
+		outline: none;
+	}
+
+	:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+
+	::selection {
+		background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+	}
+}
+
+@utility safe-bottom {
+	padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility safe-top {
+	padding-top: env(safe-area-inset-top);
+}

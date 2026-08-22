@@ -1,0 +1,68 @@
+/*
+Layer 2 — SEMANTIC ROLES. This is the tuning surface.
+
+Every role below maps to a primitive from `primitives.css`. Components never
+name a primitive; they name a role (`bg-surface`, `text-muted`, `rounded-card`),
+so retuning the whole app's look means editing this file and nothing else.
+
+Because these live in Tailwind's `@theme`, each one generates utilities:
+  --color-surface   ->  bg-surface / text-surface / border-surface
+  --radius-card     ->  rounded-card
+  --text-title      ->  text-title
+*/
+
+@theme {
+	/* ── Surfaces ─────────────────────────────────────────────────────── */
+	--color-bg:             var(--color-gray-1); /* the page itself */
+	--color-surface:        var(--color-gray-2); /* cards, rows, the tab bar */
+	--color-surface-raised: var(--color-gray-3); /* sheets, popovers, pressed chips */
+	--color-surface-sunken: var(--color-gray-0); /* inputs, wells */
+
+	/* ── Text ─────────────────────────────────────────────────────────── */
+	--color-content:        var(--color-white-1); /* primary copy, titles */
+	--color-muted:          var(--color-gray-8); /* secondary meta lines */
+	--color-subtle:         var(--color-gray-7); /* micro-labels, inactive tabs */
+	--color-faint:          var(--color-gray-6); /* placeholders, disabled */
+	--color-on-accent:      var(--color-gray-0); /* text on an accent fill */
+
+	/* ── Accent ───────────────────────────────────────────────────────────
+	   Provisional: teal. The other ramps (purple, blue, green) are all still
+	   available in primitives.css — switching accent is these four lines. */
+	--color-accent:         var(--color-teal-4);
+	--color-accent-strong:  var(--color-teal-5); /* hover/active on accent text */
+	--color-accent-muted:   var(--color-teal-3);
+	--color-accent-soft:    var(--color-teal-1); /* tinted fills, "been a while" rows */
+
+	/* ── Semantic ─────────────────────────────────────────────────────── */
+	--color-stale:          var(--color-yellow-1); /* "been a while" emphasis */
+	--color-danger:         var(--color-red-4); /* destructive actions */
+
+	/* ── Lines ────────────────────────────────────────────────────────── */
+	--color-border:         var(--color-gray-4);
+	--color-border-strong:  var(--color-gray-5);
+
+	/* ── Shape — the softness dial ────────────────────────────────────────
+	   The handoff mock was square-cornered ("blueprint"); this app is soft.
+	   Raising these rounds the entire UI at once. */
+	--radius-card:          0.75rem; /* meal cards, list groups */
+	--radius-control:       0.625rem; /* buttons, inputs, segmented control */
+	--radius-chip:          9999px; /* tags, store chips */
+	--radius-sheet:         1.25rem; /* bottom sheets (top corners only) */
+
+	/* ── Type roles ───────────────────────────────────────────────────── */
+	--font-heading:         var(--font-main);
+	--font-body:            var(--font-main);
+
+	/* Named sizes for the recurring roles in the design, so a card title is
+	   `text-card-title` everywhere rather than a remembered pixel value. */
+	--text-page-title:      1.875rem; /* 30px — the big per-tab title */
+	--text-sheet-title:     1.5625rem; /* 25px */
+	--text-card-title:      1.1875rem; /* 19px */
+	--text-section:         1rem; /* 16px — group headers */
+	--text-meta:            0.6875rem; /* 11px — meta lines under a title */
+	--text-micro:           0.625rem; /* 10px — uppercase kickers, counts */
+
+	/* ── Elevation ────────────────────────────────────────────────────── */
+	--shadow-sheet:         0 -8px 32px rgb(0 0 0 / 0.45);
+	--shadow-raised:        0 2px 8px rgb(0 0 0 / 0.3);
+}

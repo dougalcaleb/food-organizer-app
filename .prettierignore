@@ -1,0 +1,7 @@
+dist
+coverage
+tmp
+
+# The token files are written as aligned columns so the ramps read as tables;
+# Prettier collapses that alignment.
+src/styles
