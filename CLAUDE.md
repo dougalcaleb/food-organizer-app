@@ -133,12 +133,14 @@ padding, jammed under the status bar. The safe utilities already include the
 layout's own padding; tune it with `--safe-top-base` / `--safe-bottom-base`.
 `styles/safeArea.spec.ts` guards this.
 
-**Backslashes do not survive a bash heredoc.** Writing a `.ts` file via
-`cat > file <<'EOF'` turns `\b` into ``, which inside a template literal is
-the backspace escape, not a regex word boundary. That silently made an earlier
-version of the safe-area guard match nothing while reporting success. Use the
-Write tool for files containing regexes, and always prove a new guard fails when
-the bug it guards is reintroduced.
+**Backslashes do not survive a bash heredoc.** Writing a file with
+`cat > file <<'EOF'` collapses a doubled backslash to a single one. In a
+JavaScript template literal that turns an intended word-boundary escape into
+the backspace escape, so the regex matches nothing — which silently made the
+first version of the safe-area guard pass while checking absolutely nothing.
+(This paragraph was itself mangled that way on the first attempt.) Write files
+containing regexes with the Write tool, and always prove a new guard fails when
+the bug it guards is put back.
 
 **Every name in `SHEET_NAMES` needs a component in `AppSheets.vue`.** A missing
 one fails silently — the URL changes, a history entry is pushed, nothing
