@@ -15,7 +15,7 @@ annoying thing a mobile web app can do.
 */
 export type SheetName = 'settings' | 'meal' | 'editor'
 
-const SHEET_NAMES: SheetName[] = ['settings', 'meal', 'editor']
+export const SHEET_NAMES: SheetName[] = ['settings', 'meal', 'editor']
 
 function parseSheet(value: unknown): SheetName | null {
 	return SHEET_NAMES.includes(value as SheetName) ? (value as SheetName) : null
