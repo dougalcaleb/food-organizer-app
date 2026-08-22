@@ -20,6 +20,11 @@ export function extraKey(extraId: string): string {
 	return `x:${extraId}`
 }
 
+/** Inverse of `extraKey`. Returns undefined for meal-ingredient keys. */
+export function extraIdFromKey(key: string): string | undefined {
+	return key.startsWith('x:') ? key.slice(2) : undefined
+}
+
 export interface ListItem {
 	/** Stable identity, and what `checked` is keyed by. */
 	key: string

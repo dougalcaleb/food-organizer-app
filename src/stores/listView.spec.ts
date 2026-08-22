@@ -9,6 +9,7 @@ import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db'
+import { extraIdFromKey } from '@/lib/shoppingList'
 import { hydrateStores } from '@/stores'
 import { useListStore } from '@/stores/list'
 import { useSettingsStore } from '@/stores/settings'
@@ -70,5 +71,75 @@ describe('adding a one-off from the list', () => {
 		await list.addExtra('paper towels', 'walmart')
 
 		expect(list.groups.map((g) => g.title)).toEqual(['Walmart'])
+	})
+})
+
+describe('creating and promoting staples', () => {
+	it('can create a staple directly, not just a one-off', async () => {
+		const list = useListStore()
+		const extra = await list.addExtra('milk', 'either', { kind: 'staple' })
+
+		expect(extra?.kind).toBe('staple')
+		expect(list.allStaples.map((s) => s.name)).toEqual(['milk'])
+	})
+
+	it('a new staple starts on the list, not on the shelf', async () => {
+		const list = useListStore()
+		await list.addExtra('milk', 'either', { kind: 'staple' })
+
+		expect(list.openItems.map((i) => i.name)).toContain('milk')
+		expect(list.shelvedStaples).toEqual([])
+	})
+
+	it('promotes an existing one-off without retyping it', async () => {
+		const list = useListStore()
+		const extra = await list.addExtra('butter', 'costco')
+		expect(extra?.kind).toBe('oneoff')
+
+		await list.toggleStaple(extra!.id)
+
+		expect(list.allStaples.map((s) => s.name)).toEqual(['butter'])
+		// Still on the list — promoting changes its future, not this trip.
+		expect(list.openItems.map((i) => i.name)).toContain('butter')
+	})
+
+	it('demotes a staple back to a one-off', async () => {
+		const list = useListStore()
+		const extra = await list.addExtra('butter', 'costco', { kind: 'staple' })
+
+		await list.toggleStaple(extra!.id)
+		expect(list.allStaples).toEqual([])
+	})
+
+	it('changes what finishing the trip does to it', async () => {
+		const list = useListStore()
+		const extra = await list.addExtra('butter', 'costco')
+		await list.toggleStaple(extra!.id)
+		await list.toggle(list.openItems.find((i) => i.name === 'butter')!.key)
+
+		// As a one-off it would have been deleted; as a staple it is shelved.
+		expect(list.cartClearPlan.oneOffsToDelete).toEqual([])
+		expect(list.cartClearPlan.staplesToShelve.map((i) => i.name)).toEqual(['butter'])
+	})
+
+	it('survives a promotion across a reload', async () => {
+		const list = useListStore()
+		const extra = await list.addExtra('butter', 'costco')
+		await list.toggleStaple(extra!.id)
+
+		setActivePinia(createPinia())
+		await hydrateStores()
+
+		expect(useListStore().allStaples.map((s) => s.name)).toEqual(['butter'])
+	})
+
+	it('resolves an extra from its shopping list key', async () => {
+		const list = useListStore()
+		const extra = await list.addExtra('butter', 'costco')
+		const key = list.openItems.find((i) => i.name === 'butter')!.key
+
+		expect(list.extraById(extraIdFromKey(key))?.id).toBe(extra!.id)
+		// A meal-ingredient key resolves to nothing.
+		expect(extraIdFromKey('coconut milk')).toBeUndefined()
 	})
 })

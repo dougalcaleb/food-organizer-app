@@ -113,6 +113,25 @@ export const useListStore = defineStore('list', () => {
 		await updateExtra(id, { active })
 	}
 
+	/**
+	 * Flip an extra between a one-off and a staple.
+	 *
+	 * Promoting is how something you already typed becomes recurring, without
+	 * retyping it — the whole point of the shelf. Demoting leaves it on the
+	 * current list, so it still gets bought this trip, it just will not come back.
+	 */
+	async function toggleStaple(id: string) {
+		const existing = extras.value.find((e) => e.id === id)
+		if (!existing) return
+
+		await updateExtra(id, { kind: existing.kind === 'staple' ? 'oneoff' : 'staple' })
+	}
+
+	/** Look up an extra by the shopping list key that refers to it. */
+	function extraById(id: string | undefined) {
+		return id ? extras.value.find((e) => e.id === id) : undefined
+	}
+
 	/* ── Clearing the cart ────────────────────────────────────────────────── */
 
 	/**
@@ -181,6 +200,8 @@ export const useListStore = defineStore('list', () => {
 		updateExtra,
 		removeExtra,
 		setStapleActive,
+		toggleStaple,
+		extraById,
 		clearCart,
 		uncheckAll,
 	}

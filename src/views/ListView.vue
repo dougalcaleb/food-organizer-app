@@ -13,8 +13,9 @@ import BaseChip from '@/components/ui/BaseChip.vue'
 import SegControl from '@/components/ui/SegControl.vue'
 import CartClearSheet from '@/components/list/CartClearSheet.vue'
 import ShoppingRow from '@/components/list/ShoppingRow.vue'
+import { extraIdFromKey } from '@/lib/shoppingList'
 import { useListStore } from '@/stores/list'
-import { STORE_LABELS, STORES, type ShopView, type Store } from '@/types'
+import { STORE_LABELS, STORES, type ExtraKind, type ShopView, type Store } from '@/types'
 
 const list = useListStore()
 
@@ -30,18 +31,29 @@ const meta = computed(() => `${list.openItems.length} open · ${list.doneItems.l
 
 const newName = ref('')
 const newStore = ref<Store>('costco')
+const newKind = ref<ExtraKind>('oneoff')
 
-async function addOneOff() {
+const kinds: { id: ExtraKind; label: string }[] = [
+	{ id: 'oneoff', label: 'One-off' },
+	{ id: 'staple', label: 'Staple' },
+]
+
+async function addItem() {
 	if (!newName.value.trim()) return
 
-	await list.addExtra(newName.value, newStore.value)
+	await list.addExtra(newName.value, newStore.value, { kind: newKind.value })
 	newName.value = ''
+}
+
+/** The stored extra behind a shopping row, if the row is an extra at all. */
+function extraFor(key: string) {
+	return list.extraById(extraIdFromKey(key))
 }
 
 /* ── Sections ─────────────────────────────────────────────────────────── */
 
 const cartOpen = ref(true)
-const shelfOpen = ref(false)
+const shelfOpen = ref(true)
 const confirmOpen = ref(false)
 </script>
 
@@ -66,7 +78,10 @@ const confirmOpen = ref(false)
 					v-for="item in group.items"
 					:key="item.key"
 					:item="item"
+					:can-pin="!!extraFor(item.key)"
+					:staple="extraFor(item.key)?.kind === 'staple'"
 					@toggle="list.toggle(item.key)"
+					@pin="list.toggleStaple(extraIdFromKey(item.key)!)"
 				/>
 			</div>
 		</section>
@@ -81,36 +96,61 @@ const confirmOpen = ref(false)
 				<input
 					v-model="newName"
 					class="input"
-					placeholder="Add a one-off item"
+					placeholder="Add an item"
 					autocomplete="off"
-					@keydown.enter.prevent="addOneOff"
+					@keydown.enter.prevent="addItem"
 				/>
 				<BaseButton
 					variant="primary"
 					class="flex-none"
 					:disabled="!newName.trim()"
-					@click="addOneOff"
+					@click="addItem"
 				>
 					<FaIcon icon="plus" />
 					Add
 				</BaseButton>
 			</div>
 
-			<div class="mt-2 flex flex-wrap gap-1.5">
-				<BaseChip
-					v-for="store in STORES"
-					:key="store"
-					selectable
-					:active="newStore === store"
-					@click="newStore = store"
-				>
-					{{ STORE_LABELS[store] }}
-				</BaseChip>
+			<div class="mt-2 flex items-center gap-2">
+				<span class="w-11 flex-none label-micro">Kind</span>
+				<div class="flex flex-wrap gap-1.5">
+					<BaseChip
+						v-for="kind in kinds"
+						:key="kind.id"
+						selectable
+						:active="newKind === kind.id"
+						@click="newKind = kind.id"
+					>
+						{{ kind.label }}
+					</BaseChip>
+				</div>
 			</div>
+
+			<div class="mt-1.5 flex items-center gap-2">
+				<span class="w-11 flex-none label-micro">Store</span>
+				<div class="flex flex-wrap gap-1.5">
+					<BaseChip
+						v-for="store in STORES"
+						:key="store"
+						selectable
+						:active="newStore === store"
+						@click="newStore = store"
+					>
+						{{ STORE_LABELS[store] }}
+					</BaseChip>
+				</div>
+			</div>
+
+			<p v-if="newKind === 'staple'" class="mt-2 text-meta text-subtle text-pretty">
+				Staples come back to the shelf after each trip, so you never retype them.
+			</p>
 		</section>
 
-		<!-- Staples shelf -->
-		<section v-if="list.allStaples.length">
+		<!--
+			Staples shelf. Always rendered, even when empty — hiding it made the whole
+			feature look absent rather than unused.
+		-->
+		<section>
 			<button
 				type="button"
 				class="flex w-full items-baseline justify-between px-0.5 pb-2"
@@ -124,7 +164,15 @@ const confirmOpen = ref(false)
 			</button>
 
 			<div v-if="shelfOpen">
-				<p v-if="!list.shelvedStaples.length" class="px-1 text-meta text-subtle">
+				<p v-if="!list.allStaples.length" class="px-1 text-meta text-subtle text-pretty">
+					Nothing here yet. Things you buy regularly — milk, butter, coffee — live on this shelf and
+					never need retyping. Add one above with <em class="not-italic text-muted">Staple</em>
+					selected, or tap
+					<FaIcon icon="repeat" class="text-[10px] text-muted" />
+					on any item already on the list.
+				</p>
+
+				<p v-else-if="!list.shelvedStaples.length" class="px-1 text-meta text-subtle">
 					Every staple is already on the list.
 				</p>
 

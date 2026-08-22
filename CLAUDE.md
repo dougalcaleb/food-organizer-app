@@ -88,6 +88,12 @@ data:
 itself so no caller can forget. Clearing the cart is destructive, so the store
 exposes `cartClearPlan` and the UI confirms first.
 
+**Every kind of record needs a way to be created in the UI.** Staples shipped
+fully built — store, shelf, lifecycle, migration, tests — but nothing outside
+the dev seed could set `kind: 'staple'`, and the shelf was hidden when empty. In
+production the feature was unreachable and looked absent. When adding a variant
+to a model, check the creation path and the empty state in the same change.
+
 **"Made it" is the only thing that records history.** It drops the meal from the
 plan _and_ stamps `lastMadeAt`. Plain "Remove" must touch neither — changing
 your mind about the week should not make a meal look freshly eaten.
