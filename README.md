@@ -16,6 +16,9 @@ of options, not a per-day schedule. Data lives in IndexedDB on the device.
 | `npm run test`      | Unit tests (Vitest).                                                      |
 | `npm run typecheck` | `vue-tsc` only.                                                           |
 | `npm run lint`      | ESLint with `--fix`.                                                      |
+| `npm run icons`     | Regenerate the app icon set from the theme colors.                        |
+| `npm run infra`     | Create/update the AWS hosting stack. Rarely needed.                       |
+| `npm run deploy`    | Build and publish to AWS by hand. CI does this on push to `main`.         |
 | `npm run format`    | Prettier over `src/`.                                                     |
 
 ## Design language
@@ -58,12 +61,43 @@ delete.
 
 - **Fonts** are vendored latin-subset-only into `src/assets/fonts` and declared
   in `styles/fonts.css`. They are referenced by _relative_ path so Vite rebases
-  them onto the GitHub Pages base path; absolute `/fonts/...` URLs would 404 in
-  production.
-- **Routing** uses hash history, because GitHub Pages has no SPA rewrite.
+  them onto whatever base path the build targets; absolute `/fonts/...` URLs
+  would break if the app were ever served from a subpath.
+- **Routing** uses hash history. CloudFront does provide an SPA rewrite, so
+  path history would work; hash is kept because it also behaves correctly
+  inside an installed PWA.
 - **Sheets** (meal detail, editor, settings) belong in the query string, not in
   routes, so the phone's back gesture closes the sheet instead of leaving the
   app.
 - Settings live behind the gear in the page header; the tab bar stays at three.
 
 The design handoff and the original prototype are in `tmp/` (gitignored).
+
+## Install
+
+Installable as a PWA: the manifest lives in the `VitePWA` block in
+`vite.config.ts`, and the icons are generated from the theme's own colors by
+`npm run icons` rather than exported by hand. Without a manifest Chrome offers
+only a bookmark shortcut that opens in a browser tab, so `src/pwa.spec.ts`
+guards that the icons a manifest points at actually exist.
+
+Updates apply on their own — there is one user and no release ritual. The
+service worker caches build output only; your data is in IndexedDB and is never
+touched by an update.
+
+## Hosting
+
+A private S3 bucket behind CloudFront, defined in `infra/hosting.yaml` and
+deployed with `npm run infra`. There is no Route 53 hosted zone and no
+certificate: the assigned `*.cloudfront.net` domain is free and already serves
+HTTPS, and the URL does not need to be memorable. At one user's traffic this
+sits inside CloudFront's perpetual 1 TB/month free tier, so it costs nothing.
+
+Pushing to `main` builds and publishes via `.github/workflows/deploy.yml`,
+which assumes an IAM role through GitHub's OIDC provider -- there are no AWS
+keys in the repository. The role's ARN goes in the `AWS_DEPLOY_ROLE` repository
+variable; `npm run infra` prints it.
+
+Hashed assets are uploaded with a one-year `immutable` cache and `index.html`
+with `no-cache`, in that order, so the entry point is never live while pointing
+at assets that have not landed. See `scripts/deploy.sh`.

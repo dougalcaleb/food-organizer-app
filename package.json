@@ -14,7 +14,11 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"icons": "node scripts/generate-icons.mjs",
+		"infra": "bash scripts/infra.sh",
+		"deploy": "run-s build deploy-only",
+		"deploy-only": "bash scripts/deploy.sh"
 	},
 	"dependencies": {
 		"@fortawesome/fontawesome-svg-core": "^7.3.1",

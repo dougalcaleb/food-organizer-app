@@ -51,8 +51,11 @@ so the phone's back gesture closes the sheet instead of leaving the app.
 `composables/useSheet.ts` owns the names; `components/AppSheets.vue` is the
 single mount point. **Views must never mount a sheet themselves.**
 
-**Routing is hash-based** (`createWebHashHistory`) because GitHub Pages has no
-SPA rewrite.
+**Routing is hash-based** (`createWebHashHistory`). GitHub Pages having no SPA
+rewrite was the original reason; the app now ships to CloudFront, which does
+rewrite 403/404 to `/index.html`, so path history would work. Hash is kept
+deliberately — it also needs no origin support inside an installed PWA. Do not
+"fix" it without deciding to.
 
 **Three-layer styles** in `src/styles/`, and this is the whole point of the
 setup: `primitives.css` (raw ramps — what colors _exist_) →
@@ -139,6 +142,15 @@ padding, jammed under the status bar. The safe utilities already include the
 layout's own padding; tune it with `--safe-top-base` / `--safe-bottom-base`.
 `styles/safeArea.spec.ts` guards this.
 
+**Git Bash mangles POSIX paths passed to CLIs.** MSYS rewrites any argument
+that looks like an absolute path, so `aws cloudfront create-invalidation
+--paths /index.html` arrived as `C:/Program Files/Git/index.html` and was
+rejected as an invalid path. `scripts/deploy.sh` exports `MSYS_NO_PATHCONV=1`
+(inert on the Linux CI runner). Note the failure mode when diagnosing this: the
+same command against a _nonexistent_ distribution returns `NoSuchDistribution`,
+because existence is checked before paths — so a probe with a fake ID looks
+like the paths are fine.
+
 **Backslashes do not survive a bash heredoc.** Writing a file with
 `cat > file <<'EOF'` collapses a doubled backslash to a single one. In a
 JavaScript template literal that turns an intended word-boundary escape into
@@ -175,12 +187,76 @@ format` covers the whole repo, not just `src/`.
   `/fonts/…` URLs would 404 in production.
 - Seeding is dev-only; production starts empty, so empty states are what a real
   new install sees. Keep them good.
+- **Infrastructure is CloudFormation, not CDK.** `infra/hosting.yaml` plus two
+  small shell scripts, so a frontend repo gains no `aws-cdk-lib` dependency
+  tree. `npm run infra` applies it; CI only ever publishes files, never changes
+  infrastructure.
+
+## Deployment
+
+Private S3 bucket + CloudFront, defined in `infra/hosting.yaml`. Free at this
+scale: CloudFront's 1 TB/month tier is perpetual, and there is deliberately no
+Route 53 hosted zone (that $0.50/month is the only unavoidable cost in an AWS
+static site, and the URL does not need to be friendly). The bucket is private
+and reached through Origin Access Control — S3 website hosting is _not_ used,
+because it requires a public bucket and cannot serve HTTPS to the origin, and
+the PWA will need a secure origin.
+
+**`vite.config.ts` `base` is `'/'`**, not `/food-organizer-app/`. That prefix
+existed only for Pages.
+
+**Three cache tiers, and the tier follows from whether the name is hashed.**
+Anything Vite fingerprints into `assets/` gets an immutable year.
+`index.html`, `sw.js`, `registerSW.js` and `manifest.webmanifest` keep fixed
+names, so they go up `no-cache` — a service worker pinned at the edge for a
+year would keep handing an installed app an old precache manifest.
+`src/pwa.spec.ts` guards that list. **Files in `public/` are copied verbatim
+and are therefore _not_ hashed**, which is easy to miss: `icons/*` keeps its
+name across an `npm run icons`, so it gets a day, not a year. A new `public/`
+asset needs a tier decided, not the default.
+
+**Deploy order is load-bearing.** `scripts/deploy.sh` uploads hashed assets
+first with a one-year `immutable` cache, then `index.html` with `no-cache`.
+Reversing it publishes an entry point referencing assets that have not landed.
+`--delete` belongs on the first pass only — `index.html` is excluded there, so
+it survives the gap between the two passes.
+
+**Never invalidate `/*` after a deploy.** Only the unhashed files can be stale;
+a wholesale invalidation discards a year of correctly-cached assets and burns
+the monthly free invalidation allowance.
+
+CI authenticates by assuming an IAM role through GitHub's OIDC provider (which
+already existed in the account — the template references it rather than
+creating one, since a second provider for the same issuer is an error). No AWS
+keys are stored in the repo. The role is scoped to `main` of this repository
+and can only write the bucket and invalidate the one distribution.
+
+## PWA
+
+**A manifest is what separates an install from a bookmark.** Shipping without
+one is not "the PWA feature is missing" — Chrome still offers a menu entry and
+still creates a home-screen shortcut, and that shortcut opens in a browser tab.
+It looks like a broken app, not an absent feature. Requires all of: a manifest
+with `display: standalone`, an icon of at least 192px, and an HTTPS origin.
+
+**Icons are generated, not hand-exported.** `npm run icons` runs
+`scripts/generate-icons.mjs`, which renders the set from `--color-gray-1` and
+`--color-teal-4` with a dependency-free rasterizer and PNG encoder. A committed
+PNG with no source is a dead end; this way the icon cannot drift from the
+theme, and rerunning it is the whole edit loop. The maskable variant shrinks
+the mark to the central ~72%, because Android crops to an inscribed circle.
+
+**iOS ignores the manifest's icons** and reads `<link rel="apple-touch-icon">`
+from `index.html`. Both paths have to be kept, and `src/pwa.spec.ts` guards
+that every icon referenced from either one actually exists.
+
+`registerType: 'autoUpdate'` — one user, no release ritual, so an update prompt
+would be pure friction. The service worker precaches build output only; app
+data is in IndexedDB and an update never touches it.
 
 ## Not built yet
 
-Steps remaining from the original plan: **PWA** (`vite-plugin-pwa` is installed
-but unwired — needs a manifest and icons, which do not exist yet) and
-**deployment** (a GitHub Actions workflow to Pages).
+Nothing from the original plan remains.
 
 Known open questions, deliberately unresolved pending real use: whether extras
 should merge with meal ingredients; whether never-made meals should dominate the

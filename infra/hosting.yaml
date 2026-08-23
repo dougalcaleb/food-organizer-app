@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Static hosting for Pantry: a private S3 bucket fronted by CloudFront, plus an
+  IAM role GitHub Actions assumes via OIDC to deploy. Costs nothing at this
+  scale: CloudFront's 1 TB/month free tier is perpetual, and the bucket holds
+  well under a megabyte. There is deliberately no Route 53 hosted zone and no
+  ACM certificate -- the assigned *.cloudfront.net domain is free and already
+  serves HTTPS, which the PWA will need.
+
+Parameters:
+  GitHubOwner:
+    Type: String
+    Default: dougalcaleb
+    Description: GitHub account that owns the repository.
+  GitHubRepo:
+    Type: String
+    Default: food-organizer-app
+    Description: Repository name, without the owner prefix.
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: Only this branch may assume the deploy role.
+
+Resources:
+  # Private. CloudFront reaches it over the REST endpoint with Origin Access
+  # Control, so S3 static website hosting is deliberately NOT enabled -- that
+  # mode requires a public bucket and cannot speak HTTPS to the origin.
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-oac'
+        Description: Lets only this distribution read the site bucket.
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${AWS::StackName} -- Pantry'
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        # NA + EU edges only: the cheapest class, and this app has one user.
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: SiteBucketOrigin
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: SiteBucketOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          # Managed-CachingOptimized
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          # Managed-SecurityHeadersPolicy: HSTS, nosniff, frame-deny, referrer.
+          ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03
+        # The SPA rewrite GitHub Pages never had. A private bucket answers a
+        # missing key with 403 (not 404), because ListBucket is not granted --
+        # so both have to be mapped. Routing is hash-based today and does not
+        # need this; it is here so switching to path history is a one-line
+        # change rather than a broken cold load.
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${SiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+  # Assumed by GitHub Actions through the account's existing OIDC provider, so
+  # no long-lived access keys are stored as repository secrets.
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Deploys the Pantry site from GitHub Actions.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/${GitHubBranch}'
+      Policies:
+        - PolicyName: publish-site
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt SiteBucket.Arn
+              - Effect: Allow
+                Action: [s3:PutObject, s3:DeleteObject]
+                Resource: !Sub '${SiteBucket.Arn}/*'
+              - Effect: Allow
+                Action: cloudfront:CreateInvalidation
+                Resource: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+Outputs:
+  BucketName:
+    Description: Sync the contents of dist/ here.
+    Value: !Ref SiteBucket
+  DistributionId:
+    Description: Invalidate this after a deploy.
+    Value: !Ref Distribution
+  SiteUrl:
+    Description: The live app.
+    Value: !Sub 'https://${Distribution.DomainName}'
+  DeployRoleArn:
+    Description: Set as the AWS_DEPLOY_ROLE repository variable in GitHub.
+    Value: !GetAtt DeployRole.Arn

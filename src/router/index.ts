@@ -1,9 +1,11 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
 
 /*
-Hash history, deliberately: GitHub Pages has no SPA rewrite, so a path-based
-route would 404 on refresh or on a link opened cold. Hash routing also behaves
-correctly inside an installed PWA.
+Hash history, deliberately. The original reason was that GitHub Pages has no
+SPA rewrite; CloudFront now provides one (403/404 -> /index.html, see
+`infra/hosting.yaml`), so path history would work. It is kept because hash
+routing behaves correctly inside an installed PWA and needs no origin support
+at all -- switching is a real decision, not a leftover.
 
 Sheets (meal detail, meal editor, settings) are NOT routes — they live in the
 query string so the phone's back gesture closes the sheet instead of leaving
