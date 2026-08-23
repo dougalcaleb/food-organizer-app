@@ -97,6 +97,29 @@ the dev seed could set `kind: 'staple'`, and the shelf was hidden when empty. In
 production the feature was unreachable and looked absent. When adding a variant
 to a model, check the creation path and the empty state in the same change.
 
+**One-offs are made where you shop; staples are made and deleted on the shelf.**
+The List input creates one-offs only. It briefly carried a One-off/Staple
+toggle so both could be typed in one place, and that was the wrong trade: every
+item typed at the store had to answer a question that almost never applies to
+it, and staples still could not be _deleted_ anywhere — the only route was to
+put one on the list, demote it to a one-off, buy it and finish the trip.
+`components/list/StapleShelf.vue` owns both halves now. Its Edit mode is where
+a staple is typed and where the trash button lives, so the input above it is
+back to one job and its store chips need no "Store" label to disambiguate them.
+
+Two consequences worth keeping straight:
+
+- **A staple added on the shelf starts _shelved_** (`active: false`), unlike
+  `addExtra`'s default. Adding one there describes something bought regularly;
+  it is not a claim that it is needed today, and one tap on its chip says that.
+  The path for "I need this, and I'll need it again" is still to type it above
+  and promote it with the repeat control, which deliberately leaves it on the
+  list.
+- **Deleting an extra clears its checked key too.** Nothing derives the row
+  afterwards, so a leftover key is invisible rather than wrong — but before
+  there was a delete button, every extra left through `clearCart`, which wipes
+  `checked` wholesale. Now one can leave on its own.
+
 **Tags are mostly inferred, and the pinned few are a setting.** v1 shipped
 thirteen preset tags ("Weekend project", "Greek") that were never used, so the
 filter row was full of chips matching nothing — and because nothing in Settings

@@ -13,9 +13,10 @@ import BaseChip from '@/components/ui/BaseChip.vue'
 import SegControl from '@/components/ui/SegControl.vue'
 import CartClearSheet from '@/components/list/CartClearSheet.vue'
 import ShoppingRow from '@/components/list/ShoppingRow.vue'
+import StapleShelf from '@/components/list/StapleShelf.vue'
 import { extraIdFromKey } from '@/lib/shoppingList'
 import { useListStore } from '@/stores/list'
-import { STORE_LABELS, STORES, type ExtraKind, type ShopView, type Store } from '@/types'
+import { STORE_LABELS, STORES, type ShopView, type Store } from '@/types'
 
 const list = useListStore()
 
@@ -27,21 +28,23 @@ const views: { id: ShopView; label: string }[] = [
 
 const meta = computed(() => `${list.openItems.length} open · ${list.doneItems.length} in cart`)
 
-/* ── Adding a one-off ─────────────────────────────────────────────────── */
+/* ── Adding a one-off ───────────────────────────────────────────────────
+
+This input makes one-offs and nothing else. It carried a Kind toggle once, so
+every single thing typed at the store had to be told it was not a staple — a
+decision that belongs to the shelf, and now lives there. Something typed here
+that turns out to be recurring is promoted in place with the repeat control on
+its row, and the store chips need no "Store" label now that they are the only
+chips here.
+*/
 
 const newName = ref('')
 const newStore = ref<Store>('costco')
-const newKind = ref<ExtraKind>('oneoff')
-
-const kinds: { id: ExtraKind; label: string }[] = [
-	{ id: 'oneoff', label: 'One-off' },
-	{ id: 'staple', label: 'Staple' },
-]
 
 async function addItem() {
 	if (!newName.value.trim()) return
 
-	await list.addExtra(newName.value, newStore.value, { kind: newKind.value })
+	await list.addExtra(newName.value, newStore.value)
 	newName.value = ''
 }
 
@@ -53,7 +56,6 @@ function extraFor(key: string) {
 /* ── Sections ─────────────────────────────────────────────────────────── */
 
 const cartOpen = ref(true)
-const shelfOpen = ref(true)
 const confirmOpen = ref(false)
 </script>
 
@@ -112,82 +114,20 @@ const confirmOpen = ref(false)
 				</BaseButton>
 			</div>
 
-			<div class="mt-2 flex items-center gap-2">
-				<span class="w-11 flex-none label-micro">Kind</span>
-				<div class="flex flex-wrap gap-1.5">
-					<BaseChip
-						v-for="kind in kinds"
-						:key="kind.id"
-						selectable
-						:active="newKind === kind.id"
-						@click="newKind = kind.id"
-					>
-						{{ kind.label }}
-					</BaseChip>
-				</div>
-			</div>
-
-			<div class="mt-1.5 flex items-center gap-2">
-				<span class="w-11 flex-none label-micro">Store</span>
-				<div class="flex flex-wrap gap-1.5">
-					<BaseChip
-						v-for="store in STORES"
-						:key="store"
-						selectable
-						:active="newStore === store"
-						@click="newStore = store"
-					>
-						{{ STORE_LABELS[store] }}
-					</BaseChip>
-				</div>
-			</div>
-
-			<p v-if="newKind === 'staple'" class="mt-2 text-meta text-subtle text-pretty">
-				Staples return to the shelf after each trip.
-			</p>
-		</section>
-
-		<!--
-			Staples shelf. Always rendered, even when empty — hiding it made the whole
-			feature look absent rather than unused.
-		-->
-		<section>
-			<button
-				type="button"
-				class="flex w-full items-baseline justify-between px-0.5 pb-2"
-				@click="shelfOpen = !shelfOpen"
-			>
-				<h2 class="label-section text-muted">Staples</h2>
-				<span class="label-micro">
-					{{ list.shelvedStaples.length }} off the list
-					<FaIcon icon="chevron-down" :class="shelfOpen ? 'rotate-180' : ''" class="ml-1" />
-				</span>
-			</button>
-
-			<div v-if="shelfOpen">
-				<p v-if="!list.allStaples.length" class="px-1 text-meta text-subtle text-pretty">
-					Nothing here yet. Add one above as a <em class="not-italic text-muted">Staple</em>, or tap
-					<FaIcon icon="repeat" class="text-[10px] text-muted" />
-					on any item.
-				</p>
-
-				<p v-else-if="!list.shelvedStaples.length" class="px-1 text-meta text-subtle">
-					All on the list.
-				</p>
-
-				<div v-else class="flex flex-wrap gap-1.5">
-					<BaseChip
-						v-for="staple in list.shelvedStaples"
-						:key="staple.id"
-						selectable
-						@click="list.setStapleActive(staple.id, true)"
-					>
-						<FaIcon icon="plus" class="mr-1.5 text-[9px] text-accent" />
-						{{ staple.name }}
-					</BaseChip>
-				</div>
+			<div class="mt-2 flex flex-wrap gap-1.5">
+				<BaseChip
+					v-for="store in STORES"
+					:key="store"
+					selectable
+					:active="newStore === store"
+					@click="newStore = store"
+				>
+					{{ STORE_LABELS[store] }}
+				</BaseChip>
 			</div>
 		</section>
+
+		<StapleShelf />
 
 		<!-- In the cart -->
 		<section v-if="list.doneItems.length">

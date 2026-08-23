@@ -91,6 +91,19 @@ describe('creating and promoting staples', () => {
 		expect(list.shelvedStaples).toEqual([])
 	})
 
+	/*
+	The shelf editor asks for the opposite, and has to: adding one there is
+	describing something bought regularly, not shopping. Landing on this week's
+	list would be a surprise every time the shelf is tidied.
+	*/
+	it('can be created straight onto the shelf instead', async () => {
+		const list = useListStore()
+		await list.addExtra('milk', 'either', { kind: 'staple', active: false })
+
+		expect(list.shelvedStaples.map((s) => s.name)).toEqual(['milk'])
+		expect(list.openItems.map((i) => i.name)).not.toContain('milk')
+	})
+
 	it('promotes an existing one-off without retyping it', async () => {
 		const list = useListStore()
 		const extra = await list.addExtra('butter', 'costco')
@@ -141,5 +154,48 @@ describe('creating and promoting staples', () => {
 		expect(list.extraById(extraIdFromKey(key))?.id).toBe(extra!.id)
 		// A meal-ingredient key resolves to nothing.
 		expect(extraIdFromKey('coconut milk')).toBeUndefined()
+	})
+})
+
+/*
+Deleting a staple from the shelf. Before this existed the only way to be rid of
+one was to put it on the list, demote it to a one-off, check it off and finish
+the trip — four steps, one of which was buying it.
+*/
+describe('deleting a staple', () => {
+	it('removes it from the shelf for good', async () => {
+		const list = useListStore()
+		const extra = await list.addExtra('milk', 'either', { kind: 'staple', active: false })
+
+		await list.removeExtra(extra!.id)
+
+		expect(list.allStaples).toEqual([])
+		expect(await db.extras.count()).toBe(0)
+	})
+
+	it('takes it off the current list too, checked or not', async () => {
+		const list = useListStore()
+		const extra = await list.addExtra('milk', 'either', { kind: 'staple' })
+		await list.toggle(list.openItems.find((i) => i.name === 'milk')!.key)
+
+		await list.removeExtra(extra!.id)
+
+		expect(list.openItems.map((i) => i.name)).not.toContain('milk')
+		expect(list.doneItems.map((i) => i.name)).not.toContain('milk')
+	})
+
+	// The row is gone either way; the key would just outlive its record on disk.
+	it('does not leave its checked key behind', async () => {
+		const list = useListStore()
+		const extra = await list.addExtra('milk', 'either', { kind: 'staple' })
+		await list.toggle(list.openItems.find((i) => i.name === 'milk')!.key)
+		expect(await db.checked.count()).toBe(1)
+
+		await list.removeExtra(extra!.id)
+		expect(await db.checked.count()).toBe(0)
+
+		setActivePinia(createPinia())
+		await hydrateStores()
+		expect(useListStore().checked.size).toBe(0)
 	})
 })

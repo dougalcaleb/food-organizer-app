@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import * as checkedRepo from '@/db/repositories/checked'
 import * as extrasRepo from '@/db/repositories/extras'
-import { buildItems, groupItems } from '@/lib/shoppingList'
+import { buildItems, extraKey, groupItems } from '@/lib/shoppingList'
 import type { ExtraItem, ExtraKind, ShopView, Store } from '@/types'
 import { useMealsStore } from './meals'
 import { usePlanStore } from './plan'
@@ -103,9 +103,26 @@ export const useListStore = defineStore('list', () => {
 		await extrasRepo.putExtra(updated)
 	}
 
+	/**
+	 * Delete an extra outright — the shelf's way of removing a staple, and the
+	 * only path that does not involve buying it first.
+	 *
+	 * The checked key goes with it. Nothing derives that row any more, so a
+	 * stale key is invisible rather than wrong, but it would outlive the record
+	 * in IndexedDB until the next finished trip.
+	 */
 	async function removeExtra(id: string) {
+		const key = extraKey(id)
+
 		extras.value = extras.value.filter((e) => e.id !== id)
-		await extrasRepo.deleteExtra(id)
+
+		if (checked.value.has(key)) {
+			const updated = new Set(checked.value)
+			updated.delete(key)
+			checked.value = updated
+		}
+
+		await Promise.all([extrasRepo.deleteExtra(id), checkedRepo.setChecked(key, false)])
 	}
 
 	/** Move a shelved staple onto this week's list, or send it back. */
