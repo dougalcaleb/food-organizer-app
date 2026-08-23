@@ -99,7 +99,7 @@ const meta = computed(() => `${filtered.value.length} of ${meals.meals.length}`)
 				v-model="query"
 				class="input"
 				type="search"
-				placeholder="Search ideas or ingredients"
+				placeholder="Search anything"
 				autocomplete="off"
 			/>
 			<BaseButton class="flex-none" :disabled="!meals.meals.length" @click="shuffle">
