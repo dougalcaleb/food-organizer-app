@@ -210,6 +210,15 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
+              # `scripts/deploy.sh` reads the bucket name and distribution id
+              # from this stack's outputs rather than keeping them in the repo,
+              # so the role has to be able to look them up. Scoped to this one
+              # stack by its id, which is the exact ARN -- no wildcard needed,
+              # and a deleted-and-recreated stack rebuilds the role with the
+              # new one. Read-only: CI never alters infrastructure.
+              - Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource: !Ref 'AWS::StackId'
               - Effect: Allow
                 Action: s3:ListBucket
                 Resource: !GetAtt SiteBucket.Arn

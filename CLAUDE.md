@@ -228,6 +228,19 @@ an unset `AWS_DEPLOY_ROLE`, and sends you auditing everything except the claim.
 both. Do _not_ collapse them into one wildcard: `repo:dougalcaleb*` also
 matches an account someone else registers as `dougalcaleb2`.
 
+**The deploy role has to grant everything `deploy.sh` does — including
+`cloudformation:DescribeStacks`.** The script looks the bucket and distribution
+up from the stack outputs instead of hard-coding them, and reading those is a
+permission like any other; it was the one grant missing from `publish-site`.
+Nothing catches this locally, because by hand the script runs as you, with
+admin. In CI it surfaces as **`Process completed with exit code 254`** — 254 is
+the AWS CLI's own exit code for a service error, so the number tells you which
+command failed but not why. **The `AccessDenied` line is in the step's log, not
+in the run summary**, which shows only the exit code. `deployRole.spec.ts`
+pairs each `aws` call in the script with the action it needs. It also asserts
+CI holds no `cloudformation:*` beyond the read: publishing files is CI's job,
+changing infrastructure is `npm run infra` with your own credentials.
+
 **Backslashes do not survive a bash heredoc.** Writing a file with
 `cat > file <<'EOF'` collapses a doubled backslash to a single one. In a
 JavaScript template literal that turns an intended word-boundary escape into

@@ -19,11 +19,18 @@ looking everywhere but at the claim. CloudTrail's AssumeRoleWithWebIdentity
 event carries the rejected `sub` verbatim; that is how to diagnose it next time.
 */
 
-const template = readFileSync(resolve(__dirname, '..', 'infra/hosting.yaml'), 'utf8')
+const root = resolve(__dirname, '..')
+const template = readFileSync(resolve(root, 'infra/hosting.yaml'), 'utf8')
+const deployScript = readFileSync(resolve(root, 'scripts/deploy.sh'), 'utf8')
 
 const trustPolicy = template.slice(
 	template.indexOf('  DeployRole:'),
 	template.indexOf('      Policies:'),
+)
+
+const publishPolicy = template.slice(
+	template.indexOf('        - PolicyName: publish-site'),
+	template.indexOf('  BackupBucket:'),
 )
 
 describe('deploy role trust policy', () => {
@@ -58,5 +65,46 @@ describe('deploy role trust policy', () => {
 	it('pins the branch', () => {
 		expect(trustPolicy).not.toContain('refs/heads/*')
 		expect(trustPolicy.match(/refs\/heads\/\$\{GitHubBranch\}/g)).toHaveLength(2)
+	})
+})
+
+/*
+The role is scoped down to exactly what `scripts/deploy.sh` does, which means
+the two drift apart quietly: a missing grant is not a syntax error anywhere,
+and locally the script runs with whatever admin credentials you already have.
+It only fails in CI, as an `aws` exit code 254 that the workflow reports as
+"Process completed with exit code 254" with the actual AccessDenied message
+buried in the step's own output.
+
+Reading the stack outputs was the one that got missed — deploy.sh looks the
+bucket and distribution up rather than hard-coding them, and `DescribeStacks`
+is a permission like any other.
+*/
+describe('deploy role permissions', () => {
+	const needs: [string, RegExp, string][] = [
+		[
+			'reads the stack outputs',
+			/aws cloudformation describe-stacks/,
+			'cloudformation:DescribeStacks',
+		],
+		['lists the bucket to diff against', /aws s3 sync/, 's3:ListBucket'],
+		['uploads the build', /aws s3 sync/, 's3:PutObject'],
+		['sweeps replaced assets', /--delete/, 's3:DeleteObject'],
+		[
+			'invalidates the unhashed files',
+			/aws cloudfront create-invalidation/,
+			'cloudfront:CreateInvalidation',
+		],
+	]
+
+	it.each(needs)('%s', (_what, call, action) => {
+		expect(deployScript).toMatch(call)
+		expect(publishPolicy).toContain(action)
+	})
+
+	// CI publishes files. Changing infrastructure is a thing you do by hand,
+	// with your own credentials, via `npm run infra`.
+	it('cannot alter the stack it reads', () => {
+		expect(publishPolicy).not.toMatch(/cloudformation:(?!DescribeStacks)/)
 	})
 })
