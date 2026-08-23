@@ -191,6 +191,35 @@ mounting the sheet would prove nothing). The two timers are a race for the same
 reason — `AppSheets` waits `SHEET_EXIT_MS` plus a small buffer, because its
 timer starts a hair before the transition's and would otherwise win.
 
+**An exit animation is judged on its first frame, not its duration.** The
+sheet's close was reported as slow three times at three different durations,
+and the duration was never what was wrong — the curve was flat at one end or
+the other, and the flat part reads as lag:
+
+| Exit curve   | What it looks like                                      |
+| ------------ | ------------------------------------------------------- |
+| Decelerating | Away fast, then creeps between barely-there and gone    |
+| Accelerating | A beat of nothing before the panel admits it is leaving |
+
+An entrance can afford to decelerate, because settling into place is a real
+thing to depict. An exit has nothing to settle into, so it wants a curve that
+breaks away immediately and still has speed at the end —
+`cubic-bezier(0.25, 0.6, 0.65, 0.95)`, first control point well above the
+diagonal, last one short of `1`. With that, 140ms is comfortable.
+`ui/BaseSheet.spec.ts` computes each leave curve's initial slope and requires
+at least `1` (moving at or above its own average speed on frame one), plus a
+leave duration under the matching enter duration.
+
+**`animation-direction: reverse` reverses the timing function too.** The spec's
+own wording: "an ease-in animation is replaced with an ease-out animation". A
+reversed rule's curve is therefore the mirror of what it reads as, and reading
+it at face value is how the accelerating exit above got shipped while the CSS
+appeared to say the opposite. The sheet's exits are written as their own
+forward keyframes (`sheet-down`, `backdrop-out`) rather than as `sheet-up`
+reversed, for no other reason than this. The spec un-mirrors a reversed rule
+before measuring it, so putting `reverse` back cannot slip a flat start past
+the check — but prefer not to.
+
 **The tab bar's label is `leading-none` for optical centering, not for size.**
 An 11px uppercase label inheriting the body's 1.55 line-height gets a ~17px
 line box, ~5px of which sits below the baseline where no glyph in "LIST" ever

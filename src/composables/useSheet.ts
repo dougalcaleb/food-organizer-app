@@ -20,7 +20,7 @@ export type SheetName = 'settings' | 'meal' | 'editor'
  * mounted for exactly this long, and `BaseSheet` hands the same number to its
  * transition — a sheet unmounted the moment `?sheet=` clears simply vanishes.
  */
-export const SHEET_EXIT_MS = 220
+export const SHEET_EXIT_MS = 140
 
 export const SHEET_NAMES: SheetName[] = ['settings', 'meal', 'editor']
 
