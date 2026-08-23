@@ -398,30 +398,35 @@ Resources:
       TargetFunctionArn: !GetAtt BackupFunction.Arn
       AuthType: NONE
 
-  # DependsOn is load bearing. Nothing in this resource's properties mentions
-  # the URL, so CloudFormation is free to create the two in parallel -- and it
-  # did, landing the permission ~150ms BEFORE the URL existed. The stack came
-  # up green and every anonymous request to the URL was answered
-  # `403 AccessDeniedException` by Lambda's own auth layer, with the resource
-  # policy reading exactly as it should and the handler never invoked (no log
-  # streams at all is the tell). Through the distribution that 403 becomes the
-  # SPA fallback, so the app reports "returned something unexpected".
+  # A public function URL takes TWO permissions, and this is only the first.
+  # Since October 2025 Lambda requires both lambda:InvokeFunctionUrl and
+  # lambda:InvokeFunction; with only this one, every request -- anonymous or
+  # signed -- is refused `403 AccessDeniedException` by Lambda's auth layer
+  # before the handler runs, even though AuthType is NONE and this statement
+  # reads exactly as the docs say it should.
   #
-  # The ordering is the only thing that differed from a working setup -- AWS
-  # does not document it as a constraint, so treat the mechanism as unconfirmed
-  # and this as the arrangement that is known to work. What is certain is that
-  # re-creating the permission against an existing URL fixes it.
-  #
-  # Note that AWS::Lambda::Permission has no updatable properties: every change
-  # replaces it. That is what lets a redeploy repair an already-broken stack.
+  # The console and AWS SAM write both statements for you. CloudFormation, the
+  # CLI and the API do not, which is why every example that looks like this one
+  # appears to be complete.
   BackupFunctionUrlPermission:
     Type: AWS::Lambda::Permission
-    DependsOn: BackupFunctionUrl
     Properties:
-      FunctionName: !Ref BackupFunction
+      FunctionName: !GetAtt BackupFunction.Arn
       Action: lambda:InvokeFunctionUrl
       Principal: '*'
       FunctionUrlAuthType: NONE
+
+  # The second half. InvokedViaFunctionUrl is what keeps `Principal: '*'` on
+  # lambda:InvokeFunction from being a genuinely open door: without it this
+  # would let anyone holding AWS credentials invoke the function directly
+  # through the Lambda API, bypassing the URL and the bearer check with it.
+  BackupFunctionInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt BackupFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: '*'
+      InvokedViaFunctionUrl: true
 
   # ── Cost alarm ───────────────────────────────────────────────────────────
   #

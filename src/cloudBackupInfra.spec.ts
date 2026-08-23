@@ -153,29 +153,44 @@ describe('cost alarm', () => {
 })
 
 /*
-The permission that makes the function URL publicly invokable names the
-function, not the URL, so CloudFormation is free to create the two in parallel
--- and did, landing the permission before the URL existed. Everything then
-looks correct and nothing works: the stack is green, the resource policy reads
-exactly as the docs say it should, and Lambda answers every anonymous request
-`403 AccessDeniedException` without ever invoking the handler. The distribution
-turns that 403 into the SPA fallback, so the app's symptom is the generic
-"returned something unexpected".
+A public function URL takes two resource-based permissions, and granting only
+the obvious one produces an endpoint that is completely dead while every
+individual setting reads as correct: AuthType is NONE, get-policy returns the
+lambda:InvokeFunctionUrl grant exactly as documented, and Lambda still refuses
+every request -- anonymous and signed alike -- with 403 AccessDeniedException,
+before the handler. The log group having no streams at all is the tell.
+
+Since October 2025 lambda:InvokeFunction is required as well. The console and
+AWS SAM add both statements silently, so most examples in the wild show only
+the first and look complete; CloudFormation adds neither for you.
+
+Through the distribution that 403 becomes the SPA fallback, which is why the
+app's symptom is the generic "returned something unexpected" rather than
+anything pointing here.
 */
-describe('backup function url', () => {
-	const permission = template.slice(
+describe('backup function url permissions', () => {
+	const permissions = template.slice(
 		template.indexOf('  BackupFunctionUrlPermission:'),
 		template.indexOf('  # ── Cost alarm'),
 	)
 
-	it('is created only after the url it authorizes', () => {
-		expect(permission).toContain('DependsOn: BackupFunctionUrl')
+	it('opens the url to an anonymous caller, which is the whole design', () => {
+		expect(permissions).toContain('Action: lambda:InvokeFunctionUrl')
+		expect(permissions).toContain('FunctionUrlAuthType: NONE')
 	})
 
-	it('opens the url to an anonymous caller, which is the whole design', () => {
-		expect(permission).toContain('Action: lambda:InvokeFunctionUrl')
-		expect(permission).toContain("Principal: '*'")
-		expect(permission).toContain('FunctionUrlAuthType: NONE')
+	it('also grants InvokeFunction, without which the url is refused outright', () => {
+		expect(permissions).toContain('Action: lambda:InvokeFunction\n')
+	})
+
+	/*
+	`Principal: '*'` on lambda:InvokeFunction is only safe because of this: it
+	confines the grant to calls arriving through the URL. Without it, anyone
+	with AWS credentials could invoke the function directly and skip the bearer
+	check entirely.
+	*/
+	it('confines the invoke grant to calls through the url', () => {
+		expect(permissions).toContain('InvokedViaFunctionUrl: true')
 	})
 })
 

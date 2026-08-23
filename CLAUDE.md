@@ -228,23 +228,33 @@ an unset `AWS_DEPLOY_ROLE`, and sends you auditing everything except the claim.
 both. Do _not_ collapse them into one wildcard: `repo:dougalcaleb*` also
 matches an account someone else registers as `dougalcaleb2`.
 
-**The function URL's invoke permission must be created after the URL.** Nothing
-in `AWS::Lambda::Permission` references the URL, so CloudFormation built the two
-in parallel and the permission landed first. The result is a stack that is green
-and an endpoint that is entirely dead: `AuthType: NONE` is set, `get-policy`
-returns exactly the anonymous `lambda:InvokeFunctionUrl` grant the AWS docs
-show, and Lambda still answers **`403 AccessDeniedException`** — its own auth
-layer, before the handler. **The tell is that the log group has no streams at
-all**: the function was never invoked, so nothing you do to its code matters.
-Through the distribution that 403 becomes the SPA fallback, so what the app
-actually reports is `"the backup service returned something unexpected"` — the
-generic branch, three layers away from the cause. `DependsOn: BackupFunctionUrl`
-is the fix; the permission has no updatable properties, so any change to it
-forces a replacement and repairs a stack already in this state.
-`cloudBackupInfra.spec.ts` guards it. Diagnose this by curling the function URL
-directly: through CloudFront the response is indistinguishable from a routing
-mistake, and `Server: AmazonS3` in the headers is what says it never reached the
-Lambda.
+**A public Lambda function URL takes _two_ permissions, and CloudFormation
+writes neither for you.** Since October 2025 Lambda requires both
+`lambda:InvokeFunctionUrl` **and** `lambda:InvokeFunction`; with only the first
+— which is what every pre-2025 example shows, and what looks obviously correct
+— the endpoint is completely dead while every individual setting reads as
+right. `AuthType` is `NONE`, `get-policy` returns exactly the documented
+anonymous grant, and Lambda still answers **`403 AccessDeniedException`** from
+its own auth layer, before the handler. The console and AWS SAM add both
+statements silently, which is why the CloudFormation version of the "same"
+setup behaves differently from the console one. `InvokedViaFunctionUrl: true`
+on the second is not optional: it confines `Principal: '*'` to calls arriving
+through the URL, instead of letting anyone with AWS credentials invoke the
+function directly and skip the bearer check.
+
+Three things make this expensive to diagnose, so start with them:
+
+- **The log group has no streams at all.** The function was never invoked, so
+  nothing about its code, environment or execution role is involved.
+- **The app reports `"the backup service returned something unexpected"`** —
+  the distribution rewrites the origin's 403 to `index.html` with a 200, so the
+  client's generic non-JSON branch is what fires, three layers from the cause.
+  `Server: AmazonS3` on that response is what says it never reached the Lambda.
+- **Curl the function URL directly.** Through CloudFront this is
+  indistinguishable from a routing mistake. A signed request failing _the same
+  way_ as an anonymous one rules out the resource policy's principal and points
+  at the action list. (A bogus URL id is a useful control: it answers
+  `{"Message":null}`, where a real URL answers with the troubleshooting link.)
 
 **The deploy role has to grant everything `deploy.sh` does — including
 `cloudformation:DescribeStacks`.** The script looks the bucket and distribution
