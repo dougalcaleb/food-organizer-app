@@ -119,3 +119,13 @@ Never pair this with a `pb-*`/`py-*`/`p-*`: same property, silent collision.
 @utility clears-fab {
 	padding-bottom: calc(var(--fab-size) + 2rem);
 }
+
+/*
+Suppresses iOS's press-and-hold callout, which would otherwise cover a row the
+moment `useLongPress` opens its editor. Pair it with `select-none`: the callout
+and the text selection are two separate offers the browser makes for the same
+gesture, and killing one leaves the other.
+*/
+@utility touch-callout-none {
+	-webkit-touch-callout: none;
+}

@@ -9,14 +9,14 @@ CartClearSheet.
 import { computed, ref } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
-import BaseChip from '@/components/ui/BaseChip.vue'
 import SegControl from '@/components/ui/SegControl.vue'
+import StorePicker from '@/components/ui/StorePicker.vue'
 import CartClearSheet from '@/components/list/CartClearSheet.vue'
 import ShoppingRow from '@/components/list/ShoppingRow.vue'
 import StapleShelf from '@/components/list/StapleShelf.vue'
 import { extraIdFromKey } from '@/lib/shoppingList'
 import { useListStore } from '@/stores/list'
-import { STORE_LABELS, STORES, type ShopView, type Store } from '@/types'
+import { type ShopView, type Store } from '@/types'
 
 const list = useListStore()
 
@@ -36,16 +36,32 @@ decision that belongs to the shelf, and now lives there. Something typed here
 that turns out to be recurring is promoted in place with the repeat control on
 its row, and the store chips need no "Store" label now that they are the only
 chips here.
+
+The default is `wherever`, and deliberately the vaguest option: it is the one
+answer that is never wrong, so an item typed and added without a glance at the
+chips lands in a group that claims nothing about it. A concrete default —
+Costco was the first one — is a wrong store on every item that is not really
+Costco's, and a wrong store hides a line under the wrong heading in the shop.
 */
 
 const newName = ref('')
-const newStore = ref<Store>('costco')
+const newStore = ref<Store>('wherever')
 
 async function addItem() {
 	if (!newName.value.trim()) return
 
 	await list.addExtra(newName.value, newStore.value)
 	newName.value = ''
+}
+
+/**
+ * Correct the store of an extra already on the list — the row's hold gesture.
+ * Nothing else on this screen can be edited in place: a meal ingredient's
+ * store belongs to the meal, and is changed in the meal editor.
+ */
+async function setStore(key: string, store: Store) {
+	const id = extraIdFromKey(key)
+	if (id) await list.updateExtra(id, { store })
 }
 
 /** The stored extra behind a shopping row, if the row is an extra at all. */
@@ -82,8 +98,10 @@ const confirmOpen = ref(false)
 					:item="item"
 					:can-pin="!!extraFor(item.key)"
 					:staple="extraFor(item.key)?.kind === 'staple'"
+					:store="extraFor(item.key)?.store"
 					@toggle="list.toggle(item.key)"
 					@pin="list.toggleStaple(extraIdFromKey(item.key)!)"
+					@update:store="setStore(item.key, $event)"
 				/>
 			</div>
 		</section>
@@ -114,17 +132,11 @@ const confirmOpen = ref(false)
 				</BaseButton>
 			</div>
 
-			<div class="mt-2 flex flex-wrap gap-1.5">
-				<BaseChip
-					v-for="store in STORES"
-					:key="store"
-					selectable
-					:active="newStore === store"
-					@click="newStore = store"
-				>
-					{{ STORE_LABELS[store] }}
-				</BaseChip>
-			</div>
+			<StorePicker v-model="newStore" class="mt-2" />
+
+			<p class="mt-2 px-1 text-meta text-subtle text-pretty">
+				Hold an item above to change its store.
+			</p>
 		</section>
 
 		<StapleShelf />

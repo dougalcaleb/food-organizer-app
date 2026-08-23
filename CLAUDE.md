@@ -115,8 +115,11 @@ item typed at the store had to answer a question that almost never applies to
 it, and staples still could not be _deleted_ anywhere — the only route was to
 put one on the list, demote it to a one-off, buy it and finish the trip.
 `components/list/StapleShelf.vue` owns both halves now. Its Edit mode is where
-a staple is typed and where the trash button lives, so the input above it is
-back to one job and its store chips need no "Store" label to disambiguate them.
+a staple is typed, where its store is changed, and where the trash button
+lives, so the input above it is back to one job and its store chips need no
+"Store" label to disambiguate them. Edit mode shows every staple's store as a
+live picker rather than a label — it is already the explicit "maintain the
+shelf" state, so nothing there is worth hiding behind a second gesture.
 
 Two consequences worth keeping straight:
 
@@ -126,10 +129,39 @@ Two consequences worth keeping straight:
   The path for "I need this, and I'll need it again" is still to type it above
   and promote it with the repeat control, which deliberately leaves it on the
   list.
+- **A new one-off defaults to `wherever`, and that default is load-bearing.**
+  It was `costco`, which made a concrete claim about every item typed and added
+  without a glance at the chips below the input — and a wrong store files a
+  line under the wrong heading in the shop, where it is not read. `wherever`
+  is the one answer that is never wrong. Do not "improve" it to a real store,
+  or to the last store used.
 - **Deleting an extra clears its checked key too.** Nothing derives the row
   afterwards, so a leftover key is invisible rather than wrong — but before
   there was a delete button, every extra left through `clearCart`, which wipes
   `checked` wholesale. Now one can leave on its own.
+
+**An extra's store is corrected by holding its row.** Both stores were
+write-once at first: a one-off filed under the wrong heading could only be
+deleted and retyped, and a staple's store could not be reached at all after it
+was created. The shopping row's fix is a gesture, not a control, and that
+follows from the rule above it — the row's words are inert on purpose, so there
+is no room for a second visible target that is not the checkbox, and a hold is
+the one input that cannot be made by accident. `composables/useLongPress.ts`
+owns it; `components/list/holdToEditStore.spec.ts` guards it.
+
+Two things about that gesture are easy to break:
+
+- **The hold's release still arrives as a `click`.** Without
+  `consumeClick()`, a hold started over the checkbox opens the picker _and_
+  checks the item off in one gesture. The flag is cleared by the next
+  `pointerdown`, because a hold that ends over the inert text has no click to
+  consume it and would otherwise swallow the next real tap.
+- **The picker's exit is tapping the store the row already has**, which means
+  the chips cannot report that through the model alone: `defineModel`
+  suppresses an unchanged write, so `StorePicker` emits its own `pick` on every
+  tap. It also needs `select-none` _and_ `touch-callout-none` — the text
+  selection and the iOS callout are two separate offers the browser makes for
+  the same gesture, and killing one leaves the other.
 
 **Tags are mostly inferred, and the pinned few are a setting.** v1 shipped
 thirteen preset tags ("Weekend project", "Greek") that were never used, so the
