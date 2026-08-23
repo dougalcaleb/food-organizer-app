@@ -191,6 +191,14 @@ mounting the sheet would prove nothing). The two timers are a race for the same
 reason — `AppSheets` waits `SHEET_EXIT_MS` plus a small buffer, because its
 timer starts a hair before the transition's and would otherwise win.
 
+**The tab bar's label is `leading-none` for optical centering, not for size.**
+An 11px uppercase label inheriting the body's 1.55 line-height gets a ~17px
+line box, ~5px of which sits below the baseline where no glyph in "LIST" ever
+goes. The row was mathematically centered and visibly high, because the empty
+space under the words outweighed the space over the icon. This is the second
+time that bar has been fixed for looking bottom-heavy — see `--tab-bar-base`,
+which is `0` for the same reason — so measure the _ink_, not the boxes.
+
 **Anything `fixed` above the tab bar sizes itself from `--tab-bar-height`.**
 The bar is in normal flow, the Ideas "+" button is fixed, and a hand-picked
 `bottom-24` drifts the moment the bar's contents change (it did, when the tabs
