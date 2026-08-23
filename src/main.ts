@@ -6,6 +6,7 @@ import '@/styles/main.css'
 import '@/plugins/fontawesome'
 import { router } from '@/router'
 import { requestPersistentStorage } from '@/lib/storage'
+import { runCloudBackupOnLaunch } from '@/composables/useCloudBackup'
 import { hydrateStores } from '@/stores'
 import App from '@/App.vue'
 
@@ -36,6 +37,10 @@ async function bootstrap() {
 
 	await router.isReady()
 	app.mount('#app')
+
+	// Fire-and-forget, after mount and after hydration: a weekly backup is never
+	// worth delaying first paint for, and it reads the database it is backing up.
+	void runCloudBackupOnLaunch()
 }
 
 void bootstrap()

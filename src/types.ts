@@ -99,12 +99,19 @@ export interface Settings {
 	 * always on the front of that list.
 	 */
 	tags: string[]
+	/**
+	 * Epoch ms of the last successful cloud backup, or null if there has never
+	 * been one. Local-only state: it is what the launch check compares against,
+	 * and losing it with the rest of the database simply means the next launch
+	 * backs up immediately.
+	 */
+	lastCloudBackupAt: number | null
 }
 
 /** Seeded, not exhaustive — new tags are born by typing one in the editor. */
 export const DEFAULT_TAGS = ['Breakfast', 'Lunch', 'Dinner']
 
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
 
 export const DEFAULT_SETTINGS: Settings = {
 	id: 'app',
@@ -113,4 +120,5 @@ export const DEFAULT_SETTINGS: Settings = {
 	defaultShopView: 'store',
 	showSuggestions: true,
 	tags: DEFAULT_TAGS,
+	lastCloudBackupAt: null,
 }

@@ -234,6 +234,30 @@ broken migration corrupts real data on the user's next visit. See
 `db/migration.spec.ts`, which opens a genuine v1 database to exercise the
 upgrade path.
 
+**CloudFront's SPA error pages apply to the whole distribution.** `/api/backup`
+shares the distribution with the site, and `CustomErrorResponses` cannot be
+scoped to one behavior — so a 403 or 404 from the backup Lambda reaches the
+browser as `index.html` with a **200**. Nothing errors; `response.json()` throws
+somewhere unrelated and the backup looks broken for a reason nothing points at.
+The Lambda therefore answers 401 for a bad token and `200 {present: false}` for
+"nothing stored yet", never 403 or 404, and `cloudBackupInfra.spec.ts` guards
+that as text. The client's "returned something unexpected" branch is the
+backstop for the same trap.
+
+**An empty database must never be uploaded.** The sequence: the browser evicts
+IndexedDB, the app opens empty, the weekly check fires, and nothing is written
+over everything. `isSafeToUpload` refuses a backup with no meals, `uploadBackup`
+enforces it before touching the network, and the Lambda repeats the check —
+a client-side-only guard is one bad build away from gone. Bucket versioning is
+the third line, not the first. The launch check counts `db.meals` directly
+rather than reading the meals store, which filters archived meals out: a
+database holding nothing but archived meals is still one worth not overwriting.
+
+**Inline Lambda code is capped at 4096 characters.** `BackupFunction`'s
+`ZipFile` is inline so `npm run infra` needs no packaging step. If it outgrows
+the cap, move it to its own file and package it — do not start golfing it, and
+do not strip the comments, which is where the 403/404 rule above is recorded.
+
 ## Conventions
 
 - **Tabs for indentation**, single quotes, no semicolons (Prettier). `npm run
@@ -291,6 +315,102 @@ already existed in the account — the template references it rather than
 creating one, since a second provider for the same issuer is an error). No AWS
 keys are stored in the repo. The role is scoped to `main` of this repository
 and can only write the bucket and invalidate the one distribution.
+
+## Cloud backup
+
+IndexedDB is still the only working copy of the data. The cloud backup is a
+second copy, not a sync: once a week at launch the app PUTs the same JSON
+`db/backup.ts` already produced to `/api/backup`, and a Lambda writes it to a
+versioned S3 bucket under one key. Nothing else reads it; restoring is always
+something the user asks for.
+
+**The bearer token is public, deliberately.** It is compiled into the bundle as
+`VITE_BACKUP_TOKEN`, so anyone who views source has it. That was accepted with
+eyes open: this is one person's meal list, the alternatives all cost more than
+the data is worth (an unauthenticated Cognito identity pool ties the backup to
+a device identity that dies with the eviction it exists to survive, and a
+Cognito user pool is a login screen on a single-user app), and the token still
+stops a drive-by write from someone who merely guesses the domain. What makes
+it safe _enough_ is that nothing downstream trusts the caller:
+
+- The Lambda touches exactly one key and has no `s3:DeleteObject`.
+- The bucket is versioned, with 90 days of noncurrent versions. **Recovering
+  from a bad write means rolling back a version**, not restoring from
+  somewhere else.
+- The backup bucket is separate from `SiteBucket`, so a deploy's
+  `aws s3 sync --delete` can never reach it.
+- Requests over ~2 MB and anything that is not a backup are rejected.
+
+Worst case if the token leaks: someone reads a list of meals, or writes junk
+that gets rolled back. If that ever stops being acceptable, the upgrade is a
+Cognito user pool with one user — not a cleverer secret.
+
+**The token is a tracked source constant, not a `.env`.** `lib/backupToken.ts`
+is the only place it lives: `npm run build` compiles it in, and `npm run infra`
+reads that same file and deploys the value as the stack's `BackupToken`, so the
+two halves cannot drift apart. Two earlier shapes were tried and rejected — a
+`.env.local` plus a GitHub Actions variable (ceremony protecting a value Vite
+serves to the world in `assets/index-*.js` anyway, and two places to forget),
+then a tracked `.env`. **The reason it is not `.env` is the filename**, not the
+tracking: `.env` is the single most-scraped path on public GitHub, and this
+repo is public. Same disclosure either way; one of them is just handed to
+crawlers. It is also honestly a build-time constant rather than configuration.
+
+`infra.sh` matches that file **as text**, so keep the declaration a single
+single-quoted assignment. Reformat it and the script finds no token, concludes
+there is none, and generates a replacement — rotating the deployed one out from
+under the last-built bundle. `cloudBackupInfra.spec.ts` guards the shape.
+
+`npm run infra` generates a token when the constant is empty and writes it
+back. Rotating is the same move: blank it, run again, commit. The stack and the
+site go up together or the app silently cannot reach its own backup.
+
+GitHub itself will not object: secret scanning and push protection are on, but
+`secret_scanning_non_provider_patterns` is off, so only recognizable provider
+formats (`AKIA…`, `ghp_…`) are matched and a bare hex string is not one. That
+is GitHub's policy rather than a guarantee — enabling non-provider patterns
+later could start raising alerts on it.
+
+**No token, no feature.** `cloudBackupConfigured()` is false without one, the
+launch check returns immediately and the Settings block hides itself, so the
+repo as it ships — the constant present but empty — behaves exactly as it did
+before this existed.
+
+**The cost alarm is part of this decision, not housekeeping.** Nothing rate
+limits `/api/backup`, and a rejected request still costs a Lambda invocation,
+so invocation volume is the one quantity in the stack with no ceiling. The
+budget alarms at $1 actual and at a $5 forecast, and is conditional on
+`BudgetAlertEmail` — passed once as `BUDGET_ALERT_EMAIL`, read back off the
+stack afterwards. **The address is never committed, because the repo is
+public**, and a test asserts the template holds no email address at all.
+
+**It is scoped to this project by tag, not account-wide.** It was account-wide
+first, on the reasoning that a surprise bill is worth knowing about wherever it
+comes from. That was wrong for this account, which runs other and larger
+projects: a budget set low enough to notice a few dollars of Lambda here would
+have fired constantly on unrelated things, and an alarm that cries wolf is
+worse than none. So `infra.sh` tags the stack `Project=pantry`, CloudFormation
+propagates that to every resource that supports tagging, and the budget filters
+on `user:Project$pantry`.
+
+Two things that make that quieter to get wrong than it looks:
+
+- **The tag value lives in two files** — the `--tags` argument in `infra.sh`
+  and `CostFilters` in the template. Change one alone and nothing errors; the
+  budget simply matches no spend and never fires, which looks exactly like
+  everything being fine. `cloudBackupInfra.spec.ts` compares the two.
+- **Tagging a resource does nothing for billing until the tag is activated as
+  a cost allocation tag**, which is not a CloudFormation resource — `infra.sh`
+  calls `aws ce update-cost-allocation-tags-status` (best-effort; it needs
+  billing permissions the deploy itself does not). Activation is **not
+  retroactive** and can take up to 24 hours, so a new stack has a blind first
+  day. That is a real gap, not a rounding error, if something goes wrong on
+  day one.
+
+`lib/cloudBackup.ts` holds the rules and the transport; `composables/useCloudBackup.ts`
+holds the launch check and the two buttons. The launch check runs _after_
+`app.mount()`, never awaited, and swallows its errors — a phone that is offline
+at launch is the normal case, and Settings shows the real last-backup date.
 
 ## PWA
 

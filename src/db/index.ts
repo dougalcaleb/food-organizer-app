@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
-import { DEFAULT_TAGS, SCHEMA_VERSION } from '@/types'
+import { DEFAULT_TAGS } from '@/types'
 import type { CheckedItem, ExtraItem, Meal, PlanEntry, Settings } from '@/types'
 
 /*
@@ -72,7 +72,34 @@ export class AppDatabase extends Dexie {
 					.toCollection()
 					.modify((settings) => {
 						settings.tags = [...DEFAULT_TAGS]
-						settings.schemaVersion = SCHEMA_VERSION
+						// Pinned to 3, not SCHEMA_VERSION: an upgrade step is a fixed
+						// point in history and must not claim to have produced whatever
+						// the current version happens to be. Anything opening at the
+						// current schema runs the later steps too and ends up stamped
+						// correctly by the last of them.
+						settings.schemaVersion = 3
+					}),
+			)
+
+		// v4 adds `lastCloudBackupAt` for the weekly cloud backup. No index
+		// changes; the field is written here rather than left to loadSettings'
+		// defaults so an existing install has an explicit null on disk and the
+		// stored schemaVersion stays honest.
+		this.version(4)
+			.stores({
+				meals: 'id, name, lastMadeAt, archived, *tags',
+				extras: 'id, createdAt, kind',
+				plan: 'mealId, sortIndex',
+				checked: 'key',
+				settings: 'id',
+			})
+			.upgrade((tx) =>
+				tx
+					.table<Settings>('settings')
+					.toCollection()
+					.modify((settings) => {
+						settings.lastCloudBackupAt ??= null
+						settings.schemaVersion = 4
 					}),
 			)
 	}

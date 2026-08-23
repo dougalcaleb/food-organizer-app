@@ -5,6 +5,7 @@ handoff is explicit that vertical scroll lives in exactly one container.
 */
 import AppSheets from '@/components/AppSheets.vue'
 import AppTabBar from '@/components/AppTabBar.vue'
+import CloudRestoreBanner from '@/components/CloudRestoreBanner.vue'
 </script>
 
 <template>
@@ -12,6 +13,8 @@ import AppTabBar from '@/components/AppTabBar.vue'
 		<main class="min-h-0 flex-1 overflow-y-auto">
 			<RouterView />
 		</main>
+
+		<CloudRestoreBanner />
 
 		<AppTabBar />
 		<AppSheets />

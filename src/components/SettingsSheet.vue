@@ -4,12 +4,13 @@ Settings, reached from the gear in the page header — the tab bar stays at
 three. Also the home for the JSON backup, since IndexedDB is the only copy of
 this data and the browser is allowed to evict it.
 */
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseChip from '@/components/ui/BaseChip.vue'
 import BaseSheet from '@/components/ui/BaseSheet.vue'
 import SegControl from '@/components/ui/SegControl.vue'
 import { downloadBackup, restoreBackup, BackupFormatError } from '@/db/backup'
+import { useCloudBackup } from '@/composables/useCloudBackup'
 import { storageEstimate } from '@/lib/storage'
 import { useSettingsStore } from '@/stores/settings'
 import { hydrateStores } from '@/stores'
@@ -64,6 +65,36 @@ onMounted(async () => {
 const fileInput = ref<HTMLInputElement | null>(null)
 const restoreError = ref<string | null>(null)
 const restoreBusy = ref(false)
+
+/* ── Cloud backup ─────────────────────────────────────────────────────── */
+
+// Destructured, so the template sees plain refs it can unwrap. Reaching through
+// `cloud.status` would hand it a Ref object instead: auto-unwrapping only
+// applies to setup's own top-level bindings, not to properties of an object.
+const {
+	configured: cloudConfigured,
+	status: cloudStatus,
+	message: cloudMessage,
+	backUpNow,
+	restoreFromCloud,
+} = useCloudBackup()
+
+const lastCloudBackup = computed(() => {
+	const at = settings.settings.lastCloudBackupAt
+	if (at == null) return null
+
+	return new Date(at).toLocaleDateString(undefined, {
+		year: 'numeric',
+		month: 'short',
+		day: 'numeric',
+	})
+})
+
+async function onCloudRestore() {
+	// Same bar as restoring a file — it replaces everything on this device.
+	if (!window.confirm('Restoring replaces everything currently stored. Continue?')) return
+	if (await restoreFromCloud()) open.value = false
+}
 
 async function onRestoreFile(event: Event) {
 	const file = (event.target as HTMLInputElement).files?.[0]
@@ -222,6 +253,36 @@ async function resetToSeed() {
 				/>
 
 				<p v-if="restoreError" class="mt-2 text-meta text-danger">{{ restoreError }}</p>
+
+				<!--
+						Hidden outright when the build carries no token. An unconfigured
+						build — every plain `npm run dev` — should look exactly as it did
+						before this feature existed rather than offer a dead button.
+					-->
+				<div v-if="cloudConfigured" class="mt-5 border-t border-border pt-5">
+					<p class="label-micro mb-2">Cloud</p>
+					<p class="mb-3 text-meta text-subtle">
+						Backs itself up to AWS roughly once a week, on its own.
+					</p>
+
+					<div class="flex gap-2">
+						<BaseButton class="flex-1" :disabled="cloudStatus === 'working'" @click="backUpNow()">
+							{{ cloudStatus === 'working' ? 'Working…' : 'Back up now' }}
+						</BaseButton>
+						<BaseButton
+							class="flex-1"
+							:disabled="cloudStatus === 'working'"
+							@click="onCloudRestore"
+						>
+							Restore
+						</BaseButton>
+					</div>
+
+					<p v-if="cloudMessage" class="mt-2 text-meta text-danger">{{ cloudMessage }}</p>
+					<p v-else class="mt-2 text-meta text-subtle">
+						{{ lastCloudBackup ? `Last backed up ${lastCloudBackup}.` : 'Not backed up yet.' }}
+					</p>
+				</div>
 
 				<!--
 					Height is reserved because this resolves after mount, while the sheet

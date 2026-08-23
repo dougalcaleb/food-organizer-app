@@ -7,6 +7,10 @@ Description: >
   ACM certificate -- the assigned *.cloudfront.net domain is free and already
   serves HTTPS, which the PWA will need.
 
+  It also carries the cloud backup: a second, versioned bucket written by a
+  small Lambda behind a /api/backup behavior on the same distribution. Same
+  origin, so the app needs no CORS and no second domain.
+
 Parameters:
   GitHubOwner:
     Type: String
@@ -20,6 +24,27 @@ Parameters:
     Type: String
     Default: main
     Description: Only this branch may assume the deploy role.
+  # NOT a secret, and deliberately not NoEcho. The same value is compiled into
+  # the public JS bundle as VITE_BACKUP_TOKEN, so anyone who reads the app's
+  # source has it. It exists to stop drive-by writes from someone who merely
+  # guesses the distribution's domain, not to protect the data -- see the
+  # "Cloud backup" section of CLAUDE.md for why that trade is acceptable here.
+  # Left empty, the endpoint rejects every request, so an unconfigured stack is
+  # closed rather than open.
+  BackupToken:
+    Type: String
+    Default: ''
+    Description: Shared bearer token. Public by design; rotate by redeploying both stack and site.
+  # Deliberately has no default and is never committed: this repository is
+  # public. `scripts/infra.sh` takes it once from BUDGET_ALERT_EMAIL and reads
+  # it back off the stack thereafter.
+  BudgetAlertEmail:
+    Type: String
+    Default: ''
+    Description: Where to send the cost alarm. Empty leaves the alarm off.
+
+Conditions:
+  HasBudgetAlert: !Not [!Equals [!Ref BudgetAlertEmail, '']]
 
 Resources:
   # Private. CloudFront reaches it over the REST endpoint with Origin Access
@@ -68,6 +93,30 @@ Resources:
             OriginAccessControlId: !GetAtt OriginAccessControl.Id
             S3OriginConfig:
               OriginAccessIdentity: ''
+          # The backup API, as a second origin on this same distribution so the
+          # app calls it same-origin: no CORS preflight, no second domain, and
+          # nothing to configure in the client beyond a path.
+          - Id: BackupFunctionOrigin
+            DomainName: !Select [2, !Split ['/', !GetAtt BackupFunctionUrl.FunctionUrl]]
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              HTTPSPort: 443
+              OriginSSLProtocols: [TLSv1.2]
+        CacheBehaviors:
+          # Uncached and all methods forwarded. AllViewerExceptHostHeader is the
+          # policy to use for a Lambda function URL origin: the function needs
+          # the Authorization header, but Host must stay the origin's own or the
+          # URL rejects the request.
+          - PathPattern: /api/backup
+            TargetOriginId: BackupFunctionOrigin
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD]
+            Compress: true
+            # Managed-CachingDisabled
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            # Managed-AllViewerExceptHostHeader
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
         DefaultCacheBehavior:
           TargetOriginId: SiteBucketOrigin
           ViewerProtocolPolicy: redirect-to-https
@@ -83,6 +132,11 @@ Resources:
         # so both have to be mapped. Routing is hash-based today and does not
         # need this; it is here so switching to path history is a one-line
         # change rather than a broken cold load.
+        #
+        # These apply to the WHOLE distribution -- there is no way to scope them
+        # to one behavior -- so /api/backup must never answer 403 or 404 or the
+        # client receives index.html with a 200. The Lambda uses 401 and a
+        # 200 {present:false} instead; see the note in its code.
         CustomErrorResponses:
           - ErrorCode: 403
             ResponseCode: 200
@@ -143,6 +197,244 @@ Resources:
                 Action: cloudfront:CreateInvalidation
                 Resource: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
 
+  # ── Cloud backup ─────────────────────────────────────────────────────────
+  #
+  # Versioned, because the endpoint is open to anyone who reads the token out
+  # of the bundle: the recovery story for a junk or malicious write is "roll
+  # back to the previous version", not "hope". Ninety days of history costs
+  # cents at this size. Separate from SiteBucket so a deploy's `aws s3 sync
+  # --delete` can never reach it.
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-versions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 90
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+  BackupFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Lets the Pantry backup function read and write the one backup object.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: backup-object
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # One key, and no DeleteObject: the function cannot destroy
+              # history even if the token leaks, which it is expected to.
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub '${BackupBucket.Arn}/backup.json'
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub '${BackupFunctionLogs.Arn}:*'
+
+  # Explicit, so the logs expire. Lambda would create this itself with no
+  # retention at all, and named here because the function's name is fixed
+  # below (deriving it from !Ref would be circular).
+  BackupFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-backup'
+      RetentionInDays: 14
+
+  # Inline on purpose: it is under a hundred lines, and a bundled artifact
+  # would mean an S3 upload step before `npm run infra` could work at all.
+  # CloudFormation caps inline code at 4096 characters -- if this outgrows
+  # that, move it to its own file and package it, do not start golfing it.
+  BackupFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-backup'
+      Description: Stores and returns the Pantry database backup.
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt BackupFunctionRole.Arn
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          BUCKET: !Ref BackupBucket
+          KEY: backup.json
+          TOKEN: !Ref BackupToken
+      Code:
+        ZipFile: |
+          const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3')
+
+          const s3 = new S3Client({})
+          const { BUCKET, KEY, TOKEN } = process.env
+          const MAX_BYTES = 2 * 1024 * 1024
+
+          // NEVER answer 403 or 404: the distribution rewrites both to
+          // index.html with a 200 for the SPA, and cannot scope that to one
+          // behavior. 401 and 400 pass through untouched.
+          const json = (statusCode, body) => ({
+            statusCode,
+            headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+            body: JSON.stringify(body),
+          })
+
+          exports.handler = async (event) => {
+            const method = event.requestContext?.http?.method ?? 'GET'
+            const auth = event.headers?.authorization ?? ''
+
+            // An unset token closes the endpoint rather than opening it.
+            if (!TOKEN || auth !== 'Bearer ' + TOKEN) return json(401, { error: 'unauthorized' })
+
+            if (method === 'GET') {
+              try {
+                const res = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: KEY }))
+                return json(200, {
+                  present: true,
+                  savedAt: res.LastModified?.toISOString() ?? null,
+                  backup: JSON.parse(await res.Body.transformToString()),
+                })
+              } catch (err) {
+                if (err?.name === 'NoSuchKey') return json(200, { present: false })
+                throw err
+              }
+            }
+
+            if (method === 'PUT') {
+              const body = event.isBase64Encoded
+                ? Buffer.from(event.body ?? '', 'base64').toString('utf8')
+                : (event.body ?? '')
+
+              if (Buffer.byteLength(body, 'utf8') > MAX_BYTES) return json(413, { error: 'too large' })
+
+              let parsed
+              try {
+                parsed = JSON.parse(body)
+              } catch {
+                return json(400, { error: 'not json' })
+              }
+
+              if (parsed?.format !== 'food-organizer-backup' || !Array.isArray(parsed.meals)) {
+                return json(400, { error: 'not a backup' })
+              }
+
+              // The client refuses this too. Both checks are deliberate: this
+              // is the write that would otherwise overwrite a good backup with
+              // an empty database after the browser evicts IndexedDB.
+              if (parsed.meals.length === 0) return json(400, { error: 'refusing an empty backup' })
+
+              await s3.send(
+                new PutObjectCommand({
+                  Bucket: BUCKET,
+                  Key: KEY,
+                  Body: body,
+                  ContentType: 'application/json',
+                }),
+              )
+
+              return json(200, { ok: true, savedAt: new Date().toISOString() })
+            }
+
+            return json(405, { error: 'method not allowed' })
+          }
+
+  # AuthType NONE because the caller is a browser with no AWS credentials; the
+  # bearer check in the function is the whole gate. CloudFront's OAC would be
+  # the tighter option, but signing a request body through it needs an extra
+  # CloudFront Function to compute x-amz-content-sha256, which is more moving
+  # parts than this earns.
+  BackupFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt BackupFunction.Arn
+      AuthType: NONE
+
+  BackupFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt BackupFunction.Arn
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+
+  # ── Cost alarm ───────────────────────────────────────────────────────────
+  #
+  # Everything here is meant to sit inside a free tier forever, which means any
+  # bill at all is a signal rather than a degree. The specific thing worth
+  # catching: /api/backup is open to anyone who reads the token out of the
+  # bundle, nothing rate-limits it, and a rejected request still costs a Lambda
+  # invocation -- so the one unbounded quantity in this stack is somebody
+  # hammering an endpoint that answers 401.
+  #
+  # SCOPED to this project, not account-wide. It was account-wide first, on the
+  # reasoning that a surprise bill is worth knowing about wherever it comes
+  # from -- but this account runs other, larger projects, so an account-wide
+  # budget set low enough to notice a few dollars of Lambda here would fire
+  # constantly on things that have nothing to do with it. An alarm that cries
+  # wolf is an alarm that gets ignored, which is worse than none.
+  #
+  # Scoping is by cost allocation tag. That has two consequences worth knowing
+  # before trusting this: the `Project` tag has to be ACTIVATED as a cost
+  # allocation tag (scripts/infra.sh does it, it is not a CloudFormation
+  # resource), and activation is not retroactive -- it can take up to 24 hours
+  # to start appearing and never backfills. A brand new stack therefore has a
+  # blind first day. The stack tag itself is applied by `--tags` in infra.sh
+  # and propagates to every resource here that supports tagging.
+  ProjectBudget:
+    Type: AWS::Budgets::Budget
+    Condition: HasBudgetAlert
+    Properties:
+      Budget:
+        BudgetName: !Sub '${AWS::StackName}-monthly'
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: 5
+          Unit: USD
+        # Keep in step with the --tags argument in scripts/infra.sh;
+        # cloudBackupInfra.spec.ts guards that the two still agree.
+        CostFilters:
+          TagKeyValue:
+            - 'user:Project$pantry'
+      NotificationsWithSubscribers:
+        # A dollar of actual spend on resources that should cost nothing is
+        # already the interesting event; the limit only gives it a scale.
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 20
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+        # Forecast catches a run-up early in the month, while it is still
+        # cheap to go and turn something off.
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+
 Outputs:
   BucketName:
     Description: Sync the contents of dist/ here.
@@ -156,3 +448,9 @@ Outputs:
   DeployRoleArn:
     Description: Set as the AWS_DEPLOY_ROLE repository variable in GitHub.
     Value: !GetAtt DeployRole.Arn
+  BackupBucketName:
+    Description: Holds backup.json, versioned. Roll back here if a bad backup lands.
+    Value: !Ref BackupBucket
+  BackupApiUrl:
+    Description: The app calls this same-origin; nothing needs to be configured with it.
+    Value: !Sub 'https://${Distribution.DomainName}/api/backup'

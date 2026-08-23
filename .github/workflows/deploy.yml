@@ -30,7 +30,8 @@ jobs:
 
       - run: npm run test
 
-      # Typechecks as part of the build script.
+      # Typechecks as part of the build script. The backup token it compiles in
+      # comes from src/lib/backupToken.ts, so there is nothing to configure here.
       - run: npm run build
 
       - uses: aws-actions/configure-aws-credentials@v4
