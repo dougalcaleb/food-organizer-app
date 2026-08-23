@@ -228,6 +228,24 @@ an unset `AWS_DEPLOY_ROLE`, and sends you auditing everything except the claim.
 both. Do _not_ collapse them into one wildcard: `repo:dougalcaleb*` also
 matches an account someone else registers as `dougalcaleb2`.
 
+**The function URL's invoke permission must be created after the URL.** Nothing
+in `AWS::Lambda::Permission` references the URL, so CloudFormation built the two
+in parallel and the permission landed first. The result is a stack that is green
+and an endpoint that is entirely dead: `AuthType: NONE` is set, `get-policy`
+returns exactly the anonymous `lambda:InvokeFunctionUrl` grant the AWS docs
+show, and Lambda still answers **`403 AccessDeniedException`** — its own auth
+layer, before the handler. **The tell is that the log group has no streams at
+all**: the function was never invoked, so nothing you do to its code matters.
+Through the distribution that 403 becomes the SPA fallback, so what the app
+actually reports is `"the backup service returned something unexpected"` — the
+generic branch, three layers away from the cause. `DependsOn: BackupFunctionUrl`
+is the fix; the permission has no updatable properties, so any change to it
+forces a replacement and repairs a stack already in this state.
+`cloudBackupInfra.spec.ts` guards it. Diagnose this by curling the function URL
+directly: through CloudFront the response is indistinguishable from a routing
+mistake, and `Server: AmazonS3` in the headers is what says it never reached the
+Lambda.
+
 **The deploy role has to grant everything `deploy.sh` does — including
 `cloudformation:DescribeStacks`.** The script looks the bucket and distribution
 up from the stack outputs instead of hard-coding them, and reading those is a

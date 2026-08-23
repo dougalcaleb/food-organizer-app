@@ -398,10 +398,27 @@ Resources:
       TargetFunctionArn: !GetAtt BackupFunction.Arn
       AuthType: NONE
 
+  # DependsOn is load bearing. Nothing in this resource's properties mentions
+  # the URL, so CloudFormation is free to create the two in parallel -- and it
+  # did, landing the permission ~150ms BEFORE the URL existed. The stack came
+  # up green and every anonymous request to the URL was answered
+  # `403 AccessDeniedException` by Lambda's own auth layer, with the resource
+  # policy reading exactly as it should and the handler never invoked (no log
+  # streams at all is the tell). Through the distribution that 403 becomes the
+  # SPA fallback, so the app reports "returned something unexpected".
+  #
+  # The ordering is the only thing that differed from a working setup -- AWS
+  # does not document it as a constraint, so treat the mechanism as unconfirmed
+  # and this as the arrangement that is known to work. What is certain is that
+  # re-creating the permission against an existing URL fixes it.
+  #
+  # Note that AWS::Lambda::Permission has no updatable properties: every change
+  # replaces it. That is what lets a redeploy repair an already-broken stack.
   BackupFunctionUrlPermission:
     Type: AWS::Lambda::Permission
+    DependsOn: BackupFunctionUrl
     Properties:
-      FunctionName: !GetAtt BackupFunction.Arn
+      FunctionName: !Ref BackupFunction
       Action: lambda:InvokeFunctionUrl
       Principal: '*'
       FunctionUrlAuthType: NONE

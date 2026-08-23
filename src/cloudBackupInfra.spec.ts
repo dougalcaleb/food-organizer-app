@@ -152,6 +152,33 @@ describe('cost alarm', () => {
 	})
 })
 
+/*
+The permission that makes the function URL publicly invokable names the
+function, not the URL, so CloudFormation is free to create the two in parallel
+-- and did, landing the permission before the URL existed. Everything then
+looks correct and nothing works: the stack is green, the resource policy reads
+exactly as the docs say it should, and Lambda answers every anonymous request
+`403 AccessDeniedException` without ever invoking the handler. The distribution
+turns that 403 into the SPA fallback, so the app's symptom is the generic
+"returned something unexpected".
+*/
+describe('backup function url', () => {
+	const permission = template.slice(
+		template.indexOf('  BackupFunctionUrlPermission:'),
+		template.indexOf('  # ── Cost alarm'),
+	)
+
+	it('is created only after the url it authorizes', () => {
+		expect(permission).toContain('DependsOn: BackupFunctionUrl')
+	})
+
+	it('opens the url to an anonymous caller, which is the whole design', () => {
+		expect(permission).toContain('Action: lambda:InvokeFunctionUrl')
+		expect(permission).toContain("Principal: '*'")
+		expect(permission).toContain('FunctionUrlAuthType: NONE')
+	})
+})
+
 describe('backup api routing', () => {
 	const behavior = template.slice(
 		template.indexOf('- PathPattern: /api/backup'),
