@@ -19,11 +19,13 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
+          # Still explicit: v5 added automatic caching, but only off a
+          # `packageManager` field in package.json, which this repo has none of.
           cache: npm
 
       - run: npm ci
@@ -34,7 +36,10 @@ jobs:
       # comes from src/lib/backupToken.ts, so there is nothing to configure here.
       - run: npm run build
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      # v6 is the current major. Its default OIDC audience is still
+      # sts.amazonaws.com, which the deploy role's trust policy pins — check
+      # that before taking the next major.
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE }}
           aws-region: us-east-2

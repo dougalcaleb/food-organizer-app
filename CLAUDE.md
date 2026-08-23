@@ -299,6 +299,12 @@ an unset `AWS_DEPLOY_ROLE`, and sends you auditing everything except the claim.
 both. Do _not_ collapse them into one wildcard: `repo:dougalcaleb*` also
 matches an account someone else registers as `dougalcaleb2`.
 
+The same trust policy also pins `aud` to `sts.amazonaws.com`, which is
+`configure-aws-credentials`' default audience and has been across every major
+so far. That coupling is invisible from the workflow, and getting it wrong
+fails with the identical unhelpful message — so when bumping that action's
+major, check the audience default along with the release notes.
+
 **A public Lambda function URL takes _two_ permissions, and CloudFormation
 writes neither for you.** Since October 2025 Lambda requires both
 `lambda:InvokeFunctionUrl` **and** `lambda:InvokeFunction`; with only the first
