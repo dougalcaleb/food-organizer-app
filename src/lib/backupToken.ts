@@ -19,4 +19,4 @@ unchanged from before the feature existed.
 Keep the line below as one single-quoted assignment -- `scripts/infra.sh`
 matches it as text, and `cloudBackupInfra.spec.ts` guards that shape.
 */
-export const BACKUP_TOKEN = ''
+export const BACKUP_TOKEN = '7509b3a2f8ede361598f5cba9cf53c46edda7161d2317cee'
