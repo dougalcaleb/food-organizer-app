@@ -212,6 +212,22 @@ same command against a _nonexistent_ distribution returns `NoSuchDistribution`,
 because existence is checked before paths — so a probe with a fake ID looks
 like the paths are fine.
 
+**GitHub sends the OIDC subject claim in two shapes, and the deploy role has to
+accept both.** The classic one is `repo:owner/name:ref:refs/heads/main`; the
+newer _immutable_ one qualifies each half with a numeric id that a rename
+cannot recycle — `repo:owner@35942679/name@1343116230:ref:refs/heads/main`.
+This repository started sending the immutable form against a trust policy
+listing only the classic one, and every deploy failed with **"Not authorized to
+perform `sts:AssumeRoleWithWebIdentity`"** — which reads like a missing role or
+an unset `AWS_DEPLOY_ROLE`, and sends you auditing everything except the claim.
+**The diagnosis is CloudTrail, not the workflow log**: the failed
+`AssumeRoleWithWebIdentity` event carries the rejected `sub` verbatim in
+`userIdentity.principalId`, in the region the action authenticated against
+(`us-east-2` here, since STS is called regionally). `GitHubOwnerId` /
+`GitHubRepoId` exist for the second pattern and `deployRole.spec.ts` guards
+both. Do _not_ collapse them into one wildcard: `repo:dougalcaleb*` also
+matches an account someone else registers as `dougalcaleb2`.
+
 **Backslashes do not survive a bash heredoc.** Writing a file with
 `cat > file <<'EOF'` collapses a doubled backslash to a single one. In a
 JavaScript template literal that turns an intended word-boundary escape into

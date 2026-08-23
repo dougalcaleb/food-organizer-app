@@ -20,12 +20,23 @@ Parameters:
     Type: String
     Default: food-organizer-app
     Description: Repository name, without the owner prefix.
+  # GitHub now issues an "immutable" subject claim that qualifies both names
+  # with their numeric ids -- see the trust policy below for why both forms are
+  # matched. `gh api users/OWNER --jq .id` and `gh api repos/OWNER/REPO --jq .id`.
+  GitHubOwnerId:
+    Type: String
+    Default: '35942679'
+    Description: Numeric id of the owner, used by the immutable subject claim.
+  GitHubRepoId:
+    Type: String
+    Default: '1343116230'
+    Description: Numeric id of the repository, used by the immutable subject claim.
   GitHubBranch:
     Type: String
     Default: main
     Description: Only this branch may assume the deploy role.
   # NOT a secret, and deliberately not NoEcho. The same value is compiled into
-  # the public JS bundle as VITE_BACKUP_TOKEN, so anyone who reads the app's
+  # the public JS bundle from src/lib/backupToken.ts, so anyone who reads the
   # source has it. It exists to stop drive-by writes from someone who merely
   # guesses the distribution's domain, not to protect the data -- see the
   # "Cloud backup" section of CLAUDE.md for why that trade is acceptable here.
@@ -180,8 +191,20 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              # Two forms, because GitHub changed the shape of this claim. The
+              # classic one is `repo:owner/name:ref:...`; the immutable one
+              # qualifies both halves with their numeric ids, which a rename
+              # cannot recycle. A repository issuing the immutable form against
+              # a policy that lists only the classic one fails as
+              # "Not authorized to perform sts:AssumeRoleWithWebIdentity" --
+              # indistinguishable from a missing role. Both are matched so a
+              # rollout either way keeps deploying; StringLike ORs the list.
+              # Do NOT collapse these to a wildcard: `dougalcaleb*` would also
+              # match an account someone else registers as `dougalcaleb2`.
               StringLike:
-                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/${GitHubBranch}'
+                token.actions.githubusercontent.com:sub:
+                  - !Sub 'repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/${GitHubBranch}'
+                  - !Sub 'repo:${GitHubOwner}@${GitHubOwnerId}/${GitHubRepo}@${GitHubRepoId}:ref:refs/heads/${GitHubBranch}'
       Policies:
         - PolicyName: publish-site
           PolicyDocument:
