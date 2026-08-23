@@ -152,16 +152,22 @@ const textRoles = [
 			</div>
 
 			<div class="overflow-hidden rounded-card bg-surface">
-				<button v-for="n in 3" :key="n" class="list-row">
-					<span class="mt-0.5 h-[18px] w-[18px] flex-none rounded-[5px] border border-subtle" />
-					<span class="min-w-0 flex-1">
+				<!-- The checkbox is the only tap target; the words beside it are inert. -->
+				<div v-for="n in 3" :key="n" class="list-row items-stretch gap-0">
+					<button
+						type="button"
+						class="-my-2.5 -ml-3 flex w-11 flex-none items-start justify-center self-stretch pt-3"
+					>
+						<span class="h-[18px] w-[18px] flex-none rounded-[5px] border border-subtle" />
+					</button>
+					<div class="min-w-0 flex-1">
 						<span class="flex items-baseline gap-2">
 							<span class="flex-1 text-[15px]">coconut milk</span>
 							<span class="font-heading text-sm font-semibold text-accent">3 cans</span>
 						</span>
 						<span class="mt-0.5 block text-meta text-muted">Weeknight red curry</span>
-					</span>
-				</button>
+					</div>
+				</div>
 			</div>
 		</section>
 

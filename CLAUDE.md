@@ -78,6 +78,17 @@ one-off. The user's stated priority is that friction stops ideas being written
 down at all. `{ name: 'that thai place thing' }` is a complete valid meal.
 Absent fields are _omitted_, not stored as `undefined` or rendered as `0`.
 
+**Only the checkbox checks a shopping item off.** The whole row was the target
+first, on the usual reasoning that a small checkbox is not something to aim at
+one-handed in a shop. The errors are not symmetric, though: a missed tap is
+noticed and repeated a second later, while a stray one moves the line into the
+cart, out of the section being read, and is noticed at home without the thing
+it was hiding. So the target stayed large and stopped covering the words — the
+checkbox owns its own 44px column running the full height of the row, and the
+text beside it is inert. `list/ShoppingRow.spec.ts` clicks every part of the
+row that is not a button and asserts nothing is emitted, which also catches a
+handler put back on the row itself, since the clicks bubble.
+
 **Three kinds of shopping line, three lifecycles.** Getting this wrong destroys
 data:
 
