@@ -87,7 +87,7 @@ const confirmOpen = ref(false)
 		</section>
 
 		<p v-if="!list.groups.length" class="px-1 py-4 text-sm text-muted text-pretty">
-			Nothing to buy. Plan a few meals and this fills itself, or add a one-off below.
+			Nothing to buy. Plan a meal, or add an item below.
 		</p>
 
 		<!-- Add a one-off -->
@@ -98,6 +98,7 @@ const confirmOpen = ref(false)
 					class="input"
 					placeholder="Add an item"
 					autocomplete="off"
+					enterkeyhint="enter"
 					@keydown.enter.prevent="addItem"
 				/>
 				<BaseButton
@@ -142,7 +143,7 @@ const confirmOpen = ref(false)
 			</div>
 
 			<p v-if="newKind === 'staple'" class="mt-2 text-meta text-subtle text-pretty">
-				Staples come back to the shelf after each trip, so you never retype them.
+				Staples return to the shelf after each trip.
 			</p>
 		</section>
 
@@ -165,15 +166,13 @@ const confirmOpen = ref(false)
 
 			<div v-if="shelfOpen">
 				<p v-if="!list.allStaples.length" class="px-1 text-meta text-subtle text-pretty">
-					Nothing here yet. Things you buy regularly — milk, butter, coffee — live on this shelf and
-					never need retyping. Add one above with <em class="not-italic text-muted">Staple</em>
-					selected, or tap
+					Nothing here yet. Add one above as a <em class="not-italic text-muted">Staple</em>, or tap
 					<FaIcon icon="repeat" class="text-[10px] text-muted" />
-					on any item already on the list.
+					on any item.
 				</p>
 
 				<p v-else-if="!list.shelvedStaples.length" class="px-1 text-meta text-subtle">
-					Every staple is already on the list.
+					All on the list.
 				</p>
 
 				<div v-else class="flex flex-wrap gap-1.5">
@@ -220,5 +219,7 @@ const confirmOpen = ref(false)
 		</section>
 	</div>
 
-	<CartClearSheet v-if="confirmOpen" v-model:open="confirmOpen" />
+	<!-- Mounted unconditionally: BaseSheet does its own show/hide, and unmounting
+	     on close would skip the sheet's exit animation. -->
+	<CartClearSheet v-model:open="confirmOpen" />
 </template>

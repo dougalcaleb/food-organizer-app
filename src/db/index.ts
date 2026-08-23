@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
+import { DEFAULT_TAGS, SCHEMA_VERSION } from '@/types'
 import type { CheckedItem, ExtraItem, Meal, PlanEntry, Settings } from '@/types'
 
 /*
@@ -49,6 +50,29 @@ export class AppDatabase extends Dexie {
 					.modify((extra) => {
 						extra.kind ??= 'oneoff'
 						extra.active ??= true
+					}),
+			)
+
+		// v3 resets the tag vocabulary. v1 seeded thirteen tags ("Weekend
+		// project", "Greek") that were never used, leaving filter chips with
+		// nothing behind them; the list is now three, and everything else is
+		// inferred from the meals. No index changes — the stores line is repeated
+		// because Dexie requires it.
+		this.version(3)
+			.stores({
+				meals: 'id, name, lastMadeAt, archived, *tags',
+				extras: 'id, createdAt, kind',
+				plan: 'mealId, sortIndex',
+				checked: 'key',
+				settings: 'id',
+			})
+			.upgrade((tx) =>
+				tx
+					.table<Settings>('settings')
+					.toCollection()
+					.modify((settings) => {
+						settings.tags = [...DEFAULT_TAGS]
+						settings.schemaVersion = SCHEMA_VERSION
 					}),
 			)
 	}

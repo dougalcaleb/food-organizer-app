@@ -8,7 +8,7 @@ Name, tags, ingredients and notes are each optional. A completely empty meal is
 discarded on save; anything with content but no title is kept as "Untitled
 idea", because losing what someone typed is worse than a placeholder name.
 */
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch, type ComponentPublicInstance } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseChip from '@/components/ui/BaseChip.vue'
 import BaseSheet from '@/components/ui/BaseSheet.vue'
@@ -65,11 +65,10 @@ watch(
 
 /* ── Tags ─────────────────────────────────────────────────────────────── */
 
-/** The configured vocabulary plus anything already in use, minus duplicates. */
-const tagOptions = computed(() => {
-	const known = [...settings.settings.tags, ...meals.usedTags, ...tags.value]
-	return [...new Set(known)]
-})
+/** The pinned vocabulary first, then tags in use, then this meal's own. */
+const tagOptions = computed(() => [
+	...new Set([...settings.settings.tags, ...meals.usedTags, ...tags.value]),
+])
 
 function toggleTag(tag: string) {
 	tags.value = tags.value.includes(tag) ? tags.value.filter((t) => t !== tag) : [...tags.value, tag]
@@ -83,18 +82,49 @@ function addTag() {
 
 /* ── Ingredient rows ──────────────────────────────────────────────────── */
 
+/*
+Rows are focused by key rather than by index, because a row can be removed
+while the list is being typed into and an index would then point at a different
+row than the one that was asked for.
+*/
+const rowRefs = new Map<number, { focus: () => void }>()
+
+function setRowRef(key: number, el: Element | ComponentPublicInstance | null) {
+	if (el) rowRefs.set(key, el as unknown as { focus: () => void })
+	else rowRefs.delete(key)
+}
+
+async function focusRow(key: number) {
+	// A row added in this tick has no element yet.
+	await nextTick()
+	rowRefs.get(key)?.focus()
+}
+
+/** Adds a row and puts the cursor in it — the point of adding one is to type. */
 function addRow() {
-	rows.value.push(makeRow())
+	const row = makeRow()
+	rows.value.push(row)
+	void focusRow(row.key)
 }
 
 function removeRow(key: number) {
 	rows.value = rows.value.filter((row) => row.key !== key)
+	// Deliberately not `addRow`: replacing the last row is not a request to type,
+	// and stealing focus would pop the keyboard back up after a delete.
 	if (!rows.value.length) rows.value.push(makeRow())
 }
 
-/** Enter on the last row adds another; otherwise it just moves on. */
+/**
+ * Enter moves to the next row, adding one first if this was the last. Without
+ * the focus call the new row appears and the cursor stays where it was, which
+ * reads as the key having done nothing.
+ */
 function onRowEnter(key: number) {
-	if (rows.value[rows.value.length - 1]?.key === key) addRow()
+	const index = rows.value.findIndex((row) => row.key === key)
+	const next = index === -1 ? undefined : rows.value[index + 1]
+
+	if (next) void focusRow(next.key)
+	else addRow()
 }
 
 /* ── Saving ───────────────────────────────────────────────────────────── */
@@ -153,13 +183,11 @@ const isPlanned = computed(() => (props.mealId ? plan.isPlanned(props.mealId) : 
 				placeholder="What's it called?"
 				autocapitalize="sentences"
 			/>
-			<p class="mb-6 pl-1 text-meta text-subtle">
-				Everything here is optional — a name on its own is a perfectly good idea.
-			</p>
+			<p class="mb-6 pl-1 text-meta text-subtle">Everything below is optional.</p>
 
 			<section class="mb-6">
 				<p class="label-micro mb-2">Tags</p>
-				<div class="mb-2 flex flex-wrap gap-1.5">
+				<div v-if="tagOptions.length" class="mb-2 flex flex-wrap gap-1.5">
 					<BaseChip
 						v-for="tag in tagOptions"
 						:key="tag"
@@ -175,6 +203,7 @@ const isPlanned = computed(() => (props.mealId ? plan.isPlanned(props.mealId) : 
 					class="input"
 					placeholder="Add a new tag"
 					autocomplete="off"
+					enterkeyhint="enter"
 					@keydown.enter.prevent="addTag"
 				/>
 			</section>
@@ -184,6 +213,7 @@ const isPlanned = computed(() => (props.mealId ? plan.isPlanned(props.mealId) : 
 				<div class="rounded-card bg-surface px-2">
 					<IngredientRow
 						v-for="row in rows"
+						:ref="(el) => setRowRef(row.key, el)"
 						:key="row.key"
 						v-model:text="row.text"
 						v-model:store="row.store"

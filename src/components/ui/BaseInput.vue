@@ -27,6 +27,7 @@ const emit = defineEmits<{ submit: [] }>()
 		autocomplete="off"
 		autocapitalize="none"
 		spellcheck="false"
+		enterkeyhint="enter"
 		@keydown.enter.prevent="emit('submit')"
 	/>
 </template>

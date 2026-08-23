@@ -82,8 +82,11 @@ Anything one-off belongs inline in the component that needs it, not here.
 	.input::placeholder {
 		color: var(--color-faint);
 	}
+	/* One hairline, not three: the global focus ring is 2px and sits directly on
+	   the 1px border here, which read as a heavy slab of accent. */
 	.input:focus-visible {
 		border-color: var(--color-accent);
+		outline: 1px solid var(--color-accent);
 		outline-offset: 0;
 	}
 

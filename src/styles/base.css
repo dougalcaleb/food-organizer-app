@@ -83,3 +83,39 @@ than by adding a second padding utility.
 @utility safe-bottom {
 	padding-bottom: calc(env(safe-area-inset-bottom) + var(--safe-bottom-base, 0.75rem));
 }
+
+/*
+Tab bar metrics.
+
+The bar is in normal flow but anything floating above it is `fixed`, so its
+height has to be a number both can agree on rather than something measured at
+runtime. `AppTabBar` sets its own height and bottom padding from these; keep
+them the only source for both.
+*/
+:root {
+	--tab-bar-height: 3.5rem; /* the row of tabs, above its safe-area padding */
+	--tab-bar-base: 0rem; /* none: the row already centers its own contents, and
+	                         padding under it made the bar look bottom-heavy. The
+	                         device inset is still added on top. */
+	--fab-size: 2.75rem;  /* the floating "+" — same 44px tap target as .btn-icon */
+}
+
+/* Sits one page margin (the same 1rem as `right-4`) above the tab bar. */
+@utility above-tab-bar {
+	bottom: calc(
+		env(safe-area-inset-bottom) + var(--tab-bar-base) + var(--tab-bar-height) + 1rem
+	);
+}
+
+/*
+Bottom padding for a list that a FAB floats over. The button is `fixed`, so it
+covers whatever scrolls under it — the last card ended up half unreachable. The
+scroll container stops at the tab bar, so from its bottom edge the button
+occupies the 1rem gap plus its own height; the second 1rem is so the last card
+clears it rather than merely escaping it.
+
+Never pair this with a `pb-*`/`py-*`/`p-*`: same property, silent collision.
+*/
+@utility clears-fab {
+	padding-bottom: calc(var(--fab-size) + 2rem);
+}

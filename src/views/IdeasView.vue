@@ -5,7 +5,7 @@ The permanent library — every meal ever liked, so nothing gets forgotten.
 Search matches name, any ingredient, or any tag. Tag filters are AND-ed: a meal
 must carry every selected tag.
 */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseChip from '@/components/ui/BaseChip.vue'
@@ -30,8 +30,17 @@ const sorts: { id: IdeaSort; label: string }[] = [
 	{ id: 'az', label: 'A–Z' },
 ]
 
-/** Vocabulary plus anything actually in use, so a one-off tag is filterable. */
+/** The pinned vocabulary first, then anything else the meals actually use. */
 const tagOptions = computed(() => [...new Set([...settings.settings.tags, ...meals.usedTags])])
+
+/*
+Tags come and go with the meals that carry them, so a filter can outlive its
+chip — which would hide everything with no visible cause. Drop any that no
+longer exist.
+*/
+watch(tagOptions, (options) => {
+	activeTags.value = activeTags.value.filter((tag) => options.includes(tag))
+})
 
 function toggleTag(tag: string) {
 	activeTags.value = activeTags.value.includes(tag)
@@ -130,22 +139,23 @@ const meta = computed(() => `${filtered.value.length} of ${meals.meals.length}`)
 		</div>
 	</div>
 
-	<div class="flex flex-col gap-2.5 px-4 pb-6">
+	<!-- `clears-fab`, not a hand-picked `pb-*`: the "+" is fixed and would
+	     otherwise sit on top of the last card at the bottom of the scroll. -->
+	<div class="clears-fab flex flex-col gap-2.5 px-4">
 		<MealCard v-for="meal in filtered" :key="meal.id" :meal="meal" @click="open('meal', meal.id)" />
 
 		<p v-if="!meals.meals.length" class="px-1 py-8 text-sm text-muted">
-			Nothing saved yet. Jot down anything you like the sound of — a name on its own is enough.
+			Nothing saved yet. A name on its own is enough.
 		</p>
-		<p v-else-if="!filtered.length" class="px-1 py-8 text-sm text-muted">
-			Nothing matches that filter.
-		</p>
+		<p v-else-if="!filtered.length" class="px-1 py-8 text-sm text-muted">Nothing matches.</p>
 	</div>
 
-	<!-- Sits above the tab bar, out of the way of the list. -->
+	<!-- `above-tab-bar` keeps the same 1rem gap over the bar as `right-4` does
+	     from the edge; both follow the tab bar's height token. -->
 	<BaseButton
 		variant="primary"
 		icon
-		class="fixed right-4 bottom-24 z-float shadow-raised"
+		class="above-tab-bar fixed right-4 z-float shadow-raised"
 		aria-label="New meal"
 		@click="open('editor')"
 	>

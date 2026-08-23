@@ -6,6 +6,7 @@ this data and the browser is allowed to evict it.
 */
 import { onMounted, ref } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import BaseChip from '@/components/ui/BaseChip.vue'
 import BaseSheet from '@/components/ui/BaseSheet.vue'
 import SegControl from '@/components/ui/SegControl.vue'
 import { downloadBackup, restoreBackup, BackupFormatError } from '@/db/backup'
@@ -23,6 +24,28 @@ const shopViews: { id: ShopView; label: string }[] = [
 	{ id: 'meal', label: 'By meal' },
 	{ id: 'all', label: 'All' },
 ]
+
+/* ── Tags ─────────────────────────────────────────────────────────────── */
+
+const newTag = ref('')
+
+function addTag() {
+	const trimmed = newTag.value.trim()
+	newTag.value = ''
+
+	if (!trimmed || settings.settings.tags.includes(trimmed)) return
+	void settings.update({ tags: [...settings.settings.tags, trimmed] })
+}
+
+/*
+Unpinning, not deleting: meals keep the tag, so it simply drops back to being
+one of the inferred ones rather than always leading the list.
+*/
+function removeTag(tag: string) {
+	void settings.update({ tags: settings.settings.tags.filter((t) => t !== tag) })
+}
+
+/* ── Storage ──────────────────────────────────────────────────────────── */
 
 const persisted = ref<boolean | null>(null)
 const usage = ref<string | null>(null)
@@ -127,6 +150,33 @@ async function resetToSeed() {
 					:options="shopViews"
 					@update:model-value="settings.update({ defaultShopView: $event })"
 				/>
+			</section>
+
+			<section class="mb-7">
+				<p class="label-micro mb-2">Pinned tags</p>
+				<div v-if="settings.settings.tags.length" class="mb-2 flex flex-wrap gap-1.5">
+					<BaseChip
+						v-for="tag in settings.settings.tags"
+						:key="tag"
+						selectable
+						:aria-label="`Unpin ${tag}`"
+						@click="removeTag(tag)"
+					>
+						{{ tag }}
+						<FaIcon icon="xmark" class="ml-1.5 text-[9px] text-subtle" />
+					</BaseChip>
+				</div>
+				<input
+					v-model="newTag"
+					class="input"
+					placeholder="Add a tag"
+					autocomplete="off"
+					enterkeyhint="enter"
+					@keydown.enter.prevent="addTag"
+				/>
+				<p class="mt-2 text-meta text-subtle">
+					These lead every tag list. Any other tag a meal carries is offered after them.
+				</p>
 			</section>
 
 			<section class="mb-7">

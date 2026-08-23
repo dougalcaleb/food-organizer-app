@@ -1,7 +1,7 @@
 /*
 Guards against a collision that is invisible until it ships.
 
-`safe-top` and `safe-bottom` each set a padding property. Putting a second
+`safe-top`, `safe-bottom` and `clears-fab` each set a padding property. Putting a second
 utility for the SAME property on the same element (`safe-top` with `pt-4`, or
 `safe-bottom` with `py-3`) means two rules compete, and whichever is generated
 later in the stylesheet wins silently. That is how the header lost its top
@@ -17,10 +17,13 @@ eaten, and silently matched nothing while reporting success.
 import { globSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-/** Utilities that would fight each safe-area class for the same property. */
+/** Utilities that would fight one of ours for the same padding property. */
 const CONFLICTS: Record<string, string[]> = {
 	'safe-top': ['pt-', 'py-', 'p-'],
 	'safe-bottom': ['pb-', 'py-', 'p-'],
+	// Not a safe-area utility, but the same collision: it sets padding-bottom to
+	// keep a fixed FAB off the last card.
+	'clears-fab': ['pb-', 'py-', 'p-'],
 }
 
 /** Every class attribute in the file, including ones Prettier split over lines. */

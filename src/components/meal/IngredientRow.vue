@@ -18,6 +18,10 @@ const store = defineModel<Store | undefined>('store', { required: true })
 const emit = defineEmits<{ remove: []; enter: [] }>()
 
 const storeOpen = ref(false)
+const input = ref<HTMLInputElement | null>(null)
+
+/* The editor drives focus between rows — Enter on one row lands on the next. */
+defineExpose({ focus: () => input.value?.focus() })
 
 const parsed = computed(() => parseIngredient(text.value))
 
@@ -38,12 +42,21 @@ function pickStore(value: Store) {
 <template>
 	<div class="border-b border-border last:border-b-0">
 		<div class="flex items-center gap-2 py-1">
+			<!--
+				`enterkeyhint` is load-bearing, not cosmetic. Left to itself Chrome on
+				Android labels this key "Next" and handles it natively, moving focus to
+				the next field in the document — the Notes box — without ever
+				dispatching a keydown. Asking for a plain return means the handler below
+				runs and the editor decides where focus goes.
+			-->
 			<input
+				ref="input"
 				v-model="text"
 				class="input flex-1 border-transparent bg-transparent"
 				placeholder="e.g. 2 cans coconut milk"
 				autocomplete="off"
 				autocapitalize="none"
+				enterkeyhint="enter"
 				@keydown.enter.prevent="emit('enter')"
 			/>
 

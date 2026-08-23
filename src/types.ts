@@ -93,27 +93,18 @@ export interface Settings {
 	staleWeeks: number
 	defaultShopView: ShopView
 	showSuggestions: boolean
-	/** Editable tag vocabulary; seeded from the design's three axes. */
+	/**
+	 * The pinned tag vocabulary, editable in Settings. Everything else offered
+	 * as a tag is inferred from the meals themselves; these three are simply
+	 * always on the front of that list.
+	 */
 	tags: string[]
 }
 
-export const DEFAULT_TAGS = [
-	'Quick',
-	'Weekend project',
-	'Dinner',
-	'Lunch',
-	'Breakfast',
-	'Thai',
-	'Italian',
-	'Mexican',
-	'American',
-	'Greek',
-	'Japanese',
-	'Indian',
-	'Middle Eastern',
-]
+/** Seeded, not exhaustive — new tags are born by typing one in the editor. */
+export const DEFAULT_TAGS = ['Breakfast', 'Lunch', 'Dinner']
 
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export const DEFAULT_SETTINGS: Settings = {
 	id: 'app',

@@ -15,6 +15,13 @@ annoying thing a mobile web app can do.
 */
 export type SheetName = 'settings' | 'meal' | 'editor'
 
+/**
+ * How long a sheet takes to animate out. `AppSheets` keeps a closing sheet
+ * mounted for exactly this long, and `BaseSheet` hands the same number to its
+ * transition — a sheet unmounted the moment `?sheet=` clears simply vanishes.
+ */
+export const SHEET_EXIT_MS = 220
+
 export const SHEET_NAMES: SheetName[] = ['settings', 'meal', 'editor']
 
 function parseSheet(value: unknown): SheetName | null {

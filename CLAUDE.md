@@ -97,6 +97,15 @@ the dev seed could set `kind: 'staple'`, and the shelf was hidden when empty. In
 production the feature was unreachable and looked absent. When adding a variant
 to a model, check the creation path and the empty state in the same change.
 
+**Tags are mostly inferred, and the pinned few are a setting.** v1 shipped
+thirteen preset tags ("Weekend project", "Greek") that were never used, so the
+filter row was full of chips matching nothing — and because nothing in Settings
+edited them, they looked hard-coded. `Settings.tags` is now Breakfast / Lunch /
+Dinner, editable in the settings sheet, and it only _leads_ the list: every
+other option comes from `meals.usedTags`. Removing one there unpins it, it does
+not strip it off any meal. Schema v3 resets the stored list; keep the seeded
+set small.
+
 **"Made it" is the only thing that records history.** It drops the meal from the
 plan _and_ stamps `lastMadeAt`. Plain "Remove" must touch neither — changing
 your mind about the week should not make a meal look freshly eaten.
@@ -134,6 +143,58 @@ around a button whose handler does `await import('@/db/seed')` still ships the
 seed data to production. The `import.meta.env.DEV` check must wrap the _import
 itself_ so Rollup can drop the block. After touching anything dev-only, verify:
 `ls dist/assets/ | grep -i seed` must come back empty.
+
+**A sheet's `<Transition>` needs `appear`.** Sheets are mounted already open,
+and a Transition does not animate its first render without it — which traded
+the missing exit animation for a missing entrance one. `AppSheets.spec.ts`
+guards it, and has to pass `stubs: { transition: false }`: Test Utils stubs
+transitions by default, so the default setup cannot see this at all.
+
+**A sheet has to stay mounted to animate out.** `?sheet=` clears the instant
+the back gesture fires, and `AppSheets` used to unmount on that — so every
+sheet faded in and then vanished. `AppSheets` now keeps a closed sheet mounted
+for `SHEET_EXIT_MS` (and freezes the id it was opened with, or the contents
+blank mid-flight) while `BaseSheet` runs the leave. Anything else mounting a
+`BaseSheet` — `CartClearSheet` from the List view — must not `v-if` it on the
+same boolean it passes as `open`.
+
+**An exit animation has to hold its final frame.** A CSS animation with no fill
+mode reverts the element to its base style the moment it ends, and the sheet is
+still on screen at that point — Vue removes it on its own timer a frame or two
+later. The panel snapped back to fully open and bright right at the end of every
+close. Every `.sheet-leave-active` rule sets `forwards`, and
+`ui/BaseSheet.spec.ts` guards that (as text: jsdom implements no animations, so
+mounting the sheet would prove nothing). The two timers are a race for the same
+reason — `AppSheets` waits `SHEET_EXIT_MS` plus a small buffer, because its
+timer starts a hair before the transition's and would otherwise win.
+
+**Anything `fixed` above the tab bar sizes itself from `--tab-bar-height`.**
+The bar is in normal flow, the Ideas "+" button is fixed, and a hand-picked
+`bottom-24` drifts the moment the bar's contents change (it did, when the tabs
+gained icons). `styles/base.css` owns `--tab-bar-height` / `--tab-bar-base`;
+the bar sets its height and padding from them and the button uses the
+`above-tab-bar` utility, so the gap over the bar stays equal to the `right-4`
+page margin. The list underneath it needs `clears-fab` (padding-bottom from
+`--fab-size`) for the other half of the problem: a fixed button covers whatever
+scrolls under it, which left the last card half unreachable at the bottom of
+the Ideas list.
+
+**An input that handles Enter needs `enterkeyhint`.** Chrome on Android decides
+what the on-screen return key does: for a field with other fields after it, it
+labels the key "Next", moves focus to the next input in the document itself, and
+dispatches no keydown at all — so every `@keydown.enter` handler in the app was
+dead on the phone. Enter in an ingredient row focused the Notes box.
+`enterkeyhint="enter"` asks for a plain return, which does dispatch.
+`components/enterKey.spec.ts` guards it as text, because happy-dom has no IME
+and cannot reproduce this at all.
+
+**Adding a row is a request to type in it.** The meal editor moves focus to the
+row Enter (or "Add ingredient") creates — `IngredientRow` exposes a `focus()`
+for it, and rows are addressed by key, not index, since a row can be removed
+mid-edit. A row that appears without the cursor reads as the key having done
+nothing, especially when the new row is below the fold. Replacing the last
+deleted row deliberately does _not_ focus: nobody asked to type, and it would
+pop the keyboard back up.
 
 **Never pair `safe-top`/`safe-bottom` with a `pt-*`/`pb-*`/`py-*`/`p-*` on the
 same element.** Both set the same padding property, and whichever Tailwind

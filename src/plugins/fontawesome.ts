@@ -5,27 +5,33 @@ is needed; never pull in a whole icon pack.
 */
 import { library } from '@fortawesome/fontawesome-svg-core'
 import {
+	faCartShopping,
 	faCheck,
 	faChevronDown,
 	faGear,
+	faLightbulb,
 	faMagnifyingGlass,
 	faPen,
 	faPlus,
 	faRepeat,
 	faShuffle,
 	faTrash,
+	faUtensils,
 	faXmark,
 } from '@fortawesome/free-solid-svg-icons'
 
 library.add(
+	faCartShopping,
 	faCheck,
 	faChevronDown,
 	faGear,
+	faLightbulb,
 	faMagnifyingGlass,
 	faPen,
 	faPlus,
 	faRepeat,
 	faShuffle,
 	faTrash,
+	faUtensils,
 	faXmark,
 )

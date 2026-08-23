@@ -70,7 +70,7 @@ async function addToPlan(id: string) {
 			/>
 
 			<p v-if="!plan.mealIds.length" class="px-1 py-4 text-sm text-muted text-pretty">
-				Nothing planned. Add a few options below and the shopping list fills itself.
+				Nothing planned. Add a meal below.
 			</p>
 		</section>
 
@@ -101,7 +101,7 @@ async function addToPlan(id: string) {
 				</button>
 
 				<p v-if="!unplanned.length" class="px-3 py-4 text-sm text-muted">
-					Everything you have saved is already planned.
+					Everything is already planned.
 				</p>
 			</div>
 		</section>
