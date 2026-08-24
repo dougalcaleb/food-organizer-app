@@ -26,7 +26,7 @@ const tabs = [
 
 <template>
 	<nav
-		class="safe-bottom z-chrome flex flex-none border-t border-border bg-surface px-2 [--safe-bottom-base:var(--tab-bar-base)]"
+		class="safe-bottom z-chrome flex flex-none rounded-t-sheet border-t border-border bg-surface px-2 [--safe-bottom-base:var(--tab-bar-base)]"
 	>
 		<RouterLink
 			v-for="tab in tabs"
