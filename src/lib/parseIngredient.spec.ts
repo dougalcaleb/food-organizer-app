@@ -37,7 +37,7 @@ describe('parseIngredient — the shapes people actually type', () => {
 	})
 
 	it('understands fractions', () => {
-		expect(parsed('1/2 cup rice')).toEqual({ name: 'rice', amount: 0.5, unit: 'cup' })
+		expect(parsed('1/2 cup rice')).toEqual({ name: 'rice', amount: 0.5, unit: 'c' })
 	})
 
 	it('understands mixed numbers', () => {
@@ -63,6 +63,45 @@ describe('parseIngredient — the shapes people actually type', () => {
 	it('keeps "t" and "T" distinct as teaspoon and tablespoon', () => {
 		expect(parsed('1 t vanilla')).toEqual({ name: 'vanilla', amount: 1, unit: 't' })
 		expect(parsed('1 T olive oil')).toEqual({ name: 'olive oil', amount: 1, unit: 'T' })
+	})
+
+	it('recognises "c" as cups', () => {
+		expect(parsed('2 c flour')).toEqual({ name: 'flour', amount: 2, unit: 'c' })
+	})
+
+	it('collapses every spelling of a weight or volume unit to one abbreviation', () => {
+		expect(parsed('2 cup rice').unit).toBe('c')
+		expect(parsed('2 cups rice').unit).toBe('c')
+		expect(parsed('2 tsp vanilla').unit).toBe('t')
+		expect(parsed('2 teaspoon vanilla').unit).toBe('t')
+		expect(parsed('2 teaspoons vanilla').unit).toBe('t')
+		expect(parsed('2 tbsp olive oil').unit).toBe('T')
+		expect(parsed('2 tablespoon olive oil').unit).toBe('T')
+		expect(parsed('2 tablespoons olive oil').unit).toBe('T')
+		expect(parsed('2 lbs chicken').unit).toBe('lb')
+		expect(parsed('2 pound chicken').unit).toBe('lb')
+		expect(parsed('2 pounds chicken').unit).toBe('lb')
+		expect(parsed('2 ounce butter').unit).toBe('oz')
+		expect(parsed('2 ounces butter').unit).toBe('oz')
+		expect(parsed('2 gram sugar').unit).toBe('g')
+		expect(parsed('2 grams sugar').unit).toBe('g')
+		expect(parsed('2 kilogram flour').unit).toBe('kg')
+		expect(parsed('2 kilograms flour').unit).toBe('kg')
+		expect(parsed('2 milliliter stock').unit).toBe('ml')
+		expect(parsed('2 milliliters stock').unit).toBe('ml')
+		expect(parsed('2 liter stock').unit).toBe('l')
+		expect(parsed('2 liters stock').unit).toBe('l')
+		expect(parsed('2 gallon milk').unit).toBe('gal')
+		expect(parsed('2 gallons milk').unit).toBe('gal')
+		expect(parsed('2 pint cream').unit).toBe('pt')
+		expect(parsed('2 pints cream').unit).toBe('pt')
+		expect(parsed('2 quart broth').unit).toBe('qt')
+		expect(parsed('2 quarts broth').unit).toBe('qt')
+	})
+
+	it('does not collapse packaging units, since their plural agrees with the amount', () => {
+		expect(parsed('1 can beans').unit).toBe('can')
+		expect(parsed('2 cans beans').unit).toBe('cans')
 	})
 
 	it('collapses messy whitespace', () => {

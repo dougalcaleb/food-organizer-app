@@ -15,90 +15,110 @@ is the correct fallback — the name is free text and nothing downstream parses 
 import type { Ingredient } from '@/types'
 
 /**
- * Units we are willing to recognise. A closed list on purpose: matching any
- * word after a number would turn "3 bell pepper" into 3 × "bell" of "pepper".
- * Anything unrecognised stays part of the name, which reads correctly anyway.
+ * Units we are willing to recognise, mapped to the form they are stored as.
+ * A closed list on purpose: matching any word after a number would turn
+ * "3 bell pepper" into 3 × "bell" of "pepper". Anything unrecognised stays
+ * part of the name, which reads correctly anyway.
+ *
+ * Weight and volume units collapse every spelling to one canonical
+ * abbreviation — "tsp" and "teaspoon" are both saved as "t" — because they
+ * are genuinely the same unit under a different name, and it means the
+ * shopping list never has to merge spellings itself. Packaging and produce
+ * words ("can", "clove") map to themselves instead: their plural is
+ * grammatical agreement with the amount, not an alternate spelling — "2
+ * cans" collapsing to "2 can" would read wrong — and none of them has an
+ * established shorthand to collapse to anyway.
+ *
+ * "t" and "T" are the one case-sensitive pair — the baker's shorthand for
+ * teaspoon and tablespoon — so `parseIngredient` checks a bare "T" before
+ * lowercasing the word, rather than folding it in here.
  */
-const UNITS = [
+const UNIT_MAP: Record<string, string> = {
 	// weight
-	'lb',
-	'lbs',
-	'pound',
-	'pounds',
-	'oz',
-	'ounce',
-	'ounces',
-	'g',
-	'gram',
-	'grams',
-	'kg',
+	lb: 'lb',
+	lbs: 'lb',
+	pound: 'lb',
+	pounds: 'lb',
+	oz: 'oz',
+	ounce: 'oz',
+	ounces: 'oz',
+	g: 'g',
+	gram: 'g',
+	grams: 'g',
+	kg: 'kg',
+	kilogram: 'kg',
+	kilograms: 'kg',
 	// volume
-	'cup',
-	'cups',
-	'tbsp',
-	'tablespoon',
-	'tablespoons',
-	'tsp',
-	'teaspoon',
-	'teaspoons',
-	'ml',
-	'l',
-	'liter',
-	'liters',
-	'gal',
-	'gallon',
-	'gallons',
-	'pint',
-	'pints',
-	'quart',
-	'quarts',
-	// packaging
-	'can',
-	'cans',
-	'jar',
-	'jars',
-	'bag',
-	'bags',
-	'box',
-	'boxes',
-	'bottle',
-	'bottles',
-	'pack',
-	'packs',
-	'package',
-	'packages',
-	'tub',
-	'tubs',
-	'container',
-	'containers',
-	'block',
-	'blocks',
-	'stick',
-	'sticks',
-	'loaf',
-	'loaves',
+	c: 'c',
+	cup: 'c',
+	cups: 'c',
+	t: 't',
+	tsp: 't',
+	teaspoon: 't',
+	teaspoons: 't',
+	tbsp: 'T',
+	tablespoon: 'T',
+	tablespoons: 'T',
+	ml: 'ml',
+	milliliter: 'ml',
+	milliliters: 'ml',
+	l: 'l',
+	liter: 'l',
+	liters: 'l',
+	gal: 'gal',
+	gallon: 'gal',
+	gallons: 'gal',
+	pt: 'pt',
+	pint: 'pt',
+	pints: 'pt',
+	qt: 'qt',
+	quart: 'qt',
+	quarts: 'qt',
+	// packaging — map to themselves, no collapsing
+	can: 'can',
+	cans: 'cans',
+	jar: 'jar',
+	jars: 'jars',
+	bag: 'bag',
+	bags: 'bags',
+	box: 'box',
+	boxes: 'boxes',
+	bottle: 'bottle',
+	bottles: 'bottles',
+	pack: 'pack',
+	packs: 'packs',
+	package: 'package',
+	packages: 'packages',
+	tub: 'tub',
+	tubs: 'tubs',
+	container: 'container',
+	containers: 'containers',
+	block: 'block',
+	blocks: 'blocks',
+	stick: 'stick',
+	sticks: 'sticks',
+	loaf: 'loaf',
+	loaves: 'loaves',
 	// produce and other countables
-	'bunch',
-	'bunches',
-	'head',
-	'heads',
-	'clove',
-	'cloves',
-	'sprig',
-	'sprigs',
-	'slice',
-	'slices',
-	'wedge',
-	'wedges',
-	'knob',
-	'knobs',
-	'dozen',
-	'handful',
-	'pinch',
-	'dash',
-]
-
-const UNIT_SET = new Set(UNITS)
+	bunch: 'bunch',
+	bunches: 'bunches',
+	head: 'head',
+	heads: 'heads',
+	clove: 'clove',
+	cloves: 'cloves',
+	sprig: 'sprig',
+	sprigs: 'sprigs',
+	slice: 'slice',
+	slices: 'slices',
+	wedge: 'wedge',
+	wedges: 'wedges',
+	knob: 'knob',
+	knobs: 'knobs',
+	dozen: 'dozen',
+	handful: 'handful',
+	pinch: 'pinch',
+	dash: 'dash',
+}
 
 /**
  * Leading quantity: "2", "1.5", "1/2", or a mixed number like "2 1/2".
@@ -160,15 +180,15 @@ export function parseIngredient(input: string): ParsedIngredient {
 	let unit: string | undefined
 	const [firstWord, ...remaining] = rest.split(' ')
 
-	// "t" and "T" are a case-sensitive pair — the baker's shorthand for
-	// teaspoon and tablespoon — so they are matched before the word is
-	// lowercased, and kept as-is rather than folded together like every
-	// other unit below.
-	if (firstWord === 't' || firstWord === 'T') {
-		unit = firstWord
+	// A bare "T" is the case-sensitive exception — see UNIT_MAP's comment —
+	// so it is checked before the word is lowercased, ahead of the map
+	// lookup that would otherwise fold it onto lowercase "t" (teaspoon).
+	const lowerFirstWord = firstWord.toLowerCase()
+	if (firstWord === 'T') {
+		unit = 'T'
 		rest = remaining.join(' ').trim()
-	} else if (UNIT_SET.has(firstWord.toLowerCase())) {
-		unit = firstWord.toLowerCase()
+	} else if (Object.hasOwn(UNIT_MAP, lowerFirstWord)) {
+		unit = UNIT_MAP[lowerFirstWord]
 		rest = remaining.join(' ').trim()
 	}
 
