@@ -160,14 +160,21 @@ export function parseIngredient(input: string): ParsedIngredient {
 	let unit: string | undefined
 	const [firstWord, ...remaining] = rest.split(' ')
 
-	if (UNIT_SET.has(firstWord.toLowerCase())) {
+	// "t" and "T" are a case-sensitive pair — the baker's shorthand for
+	// teaspoon and tablespoon — so they are matched before the word is
+	// lowercased, and kept as-is rather than folded together like every
+	// other unit below.
+	if (firstWord === 't' || firstWord === 'T') {
+		unit = firstWord
+		rest = remaining.join(' ').trim()
+	} else if (UNIT_SET.has(firstWord.toLowerCase())) {
 		unit = firstWord.toLowerCase()
 		rest = remaining.join(' ').trim()
+	}
 
-		// "2 cans of coconut milk"
-		if (rest.toLowerCase().startsWith('of ')) {
-			rest = rest.slice(3).trim()
-		}
+	// "2 cans of coconut milk"
+	if (unit && rest.toLowerCase().startsWith('of ')) {
+		rest = rest.slice(3).trim()
 	}
 
 	// A quantity and a unit but no name ("2 cans") is not useful — treat the

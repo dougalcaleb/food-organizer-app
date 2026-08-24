@@ -60,6 +60,11 @@ describe('parseIngredient — the shapes people actually type', () => {
 		})
 	})
 
+	it('keeps "t" and "T" distinct as teaspoon and tablespoon', () => {
+		expect(parsed('1 t vanilla')).toEqual({ name: 'vanilla', amount: 1, unit: 't' })
+		expect(parsed('1 T olive oil')).toEqual({ name: 'olive oil', amount: 1, unit: 'T' })
+	})
+
 	it('collapses messy whitespace', () => {
 		expect(parsed('  2   cans    coconut  milk ')).toEqual({
 			name: 'coconut milk',
