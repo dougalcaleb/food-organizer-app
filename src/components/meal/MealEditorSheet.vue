@@ -13,6 +13,8 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseChip from '@/components/ui/BaseChip.vue'
 import BaseSheet from '@/components/ui/BaseSheet.vue'
 import IngredientRow from '@/components/meal/IngredientRow.vue'
+import { useDragSort } from '@/composables/useDragSort'
+import { moveItem } from '@/lib/dragSort'
 import { formatIngredient } from '@/lib/parseIngredient'
 import { draftHasContent, draftToPayload, type MealDraft } from '@/lib/mealDraft'
 import { useMealsStore } from '@/stores/meals'
@@ -87,10 +89,15 @@ Rows are focused by key rather than by index, because a row can be removed
 while the list is being typed into and an index would then point at a different
 row than the one that was asked for.
 */
-const rowRefs = new Map<number, { focus: () => void }>()
+interface RowHandle {
+	focus: () => void
+	focusHandle: () => void
+}
+
+const rowRefs = new Map<number, RowHandle>()
 
 function setRowRef(key: number, el: Element | ComponentPublicInstance | null) {
-	if (el) rowRefs.set(key, el as unknown as { focus: () => void })
+	if (el) rowRefs.set(key, el as unknown as RowHandle)
 	else rowRefs.delete(key)
 }
 
@@ -125,6 +132,51 @@ function onRowEnter(key: number) {
 
 	if (next) void focusRow(next.key)
 	else addRow()
+}
+
+/* ── Ordering ─────────────────────────────────────────────────────────── */
+
+/*
+Ingredients are stored in the order they are typed and read back in that order
+everywhere, so this is the order the meal is written down in — the shopping
+list is alphabetical and unaffected by it.
+
+The drag is a handle, not the whole row: the row is a text field, and a press
+on a text field belongs to the caret. `useDragSort` measures the list and says
+which slot the row has reached; moving it is this component's job, because the
+rows are its state.
+*/
+const scroller = ref<HTMLElement | null>(null)
+
+const {
+	index: draggedIndex,
+	offset: dragOffset,
+	settling: dragSettling,
+	start: grabRow,
+} = useDragSort({
+	move: (from, to) => {
+		rows.value = moveItem(rows.value, from, to)
+	},
+	scroller: () => scroller.value,
+})
+
+/**
+ * The keyboard's half of the same thing, from the handle: a control that can
+ * only be operated by dragging cannot be operated without a pointer at all.
+ *
+ * Focus follows the row rather than the slot. Left where it was, a second press
+ * would move whichever row had just slid into that position, so holding the key
+ * down would shuffle the list instead of carrying one row through it.
+ */
+async function nudgeRow(index: number, delta: number) {
+	const row = rows.value[index]
+	const to = index + delta
+	if (!row || to < 0 || to >= rows.value.length) return
+
+	rows.value = moveItem(rows.value, index, to)
+
+	await nextTick()
+	rowRefs.get(row.key)?.focusHandle()
 }
 
 /* ── Saving ───────────────────────────────────────────────────────────── */
@@ -176,7 +228,7 @@ const isPlanned = computed(() => (props.mealId ? plan.isPlanned(props.mealId) : 
 			</BaseButton>
 		</header>
 
-		<div class="flex-1 overflow-y-auto px-4 py-4">
+		<div ref="scroller" class="flex-1 overflow-y-auto px-4 py-4">
 			<input
 				v-model="name"
 				class="input mb-1 text-card-title"
@@ -210,17 +262,33 @@ const isPlanned = computed(() => (props.mealId ? plan.isPlanned(props.mealId) : 
 
 			<section class="mb-6">
 				<p class="label-micro mb-2">Ingredients</p>
-				<div class="rounded-card bg-surface px-2">
+				<!--
+					A TransitionGroup so the rows a drag displaces slide out of its way
+					rather than teleporting. `relative` is not decoration: the rows are
+					measured with `offsetTop`, which needs this to be their offset parent.
+				-->
+				<TransitionGroup
+					tag="div"
+					name="ing"
+					class="relative rounded-card bg-surface px-2"
+					:class="{ 'select-none': draggedIndex !== -1 }"
+				>
 					<IngredientRow
-						v-for="row in rows"
+						v-for="(row, index) in rows"
 						:ref="(el) => setRowRef(row.key, el)"
 						:key="row.key"
 						v-model:text="row.text"
 						v-model:store="row.store"
+						data-sortable
+						:lifted="draggedIndex === index && !dragSettling"
+						:offset="draggedIndex === index ? dragOffset : 0"
+						:settling="draggedIndex === index && dragSettling"
 						@remove="removeRow(row.key)"
 						@enter="onRowEnter(row.key)"
+						@grab="grabRow"
+						@nudge="nudgeRow(index, $event)"
 					/>
-				</div>
+				</TransitionGroup>
 				<BaseButton variant="ghost" class="mt-2" @click="addRow">
 					<FaIcon icon="plus" />
 					Add ingredient
@@ -255,3 +323,33 @@ const isPlanned = computed(() => (props.mealId ? plan.isPlanned(props.mealId) : 
 		</footer>
 	</BaseSheet>
 </template>
+
+<style scoped>
+/*
+The FLIP transition TransitionGroup runs when a row changes slot. The row under
+the finger is excluded: it is already positioned by the drag itself, and
+letting the move animation have it too would make it trail the pointer by the
+length of the animation every time it passed a neighbour.
+
+`:has()` rather than a marker on the row itself, and that is not a style
+preference. TransitionGroup asks whether a move can be animated at all by
+cloning the FIRST row, adding this class to the clone and reading the clone's
+transition back — so a rule that switched itself off from the row's own
+attributes would switch the animation off for every row whenever the top one
+was the row being dragged. The clone is shallow, so a marker one level inside
+the row is invisible to it.
+*/
+.ing-move {
+	transition: transform 180ms cubic-bezier(0.2, 0.7, 0.4, 1);
+}
+
+.ing-move:has([data-lifted]) {
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ing-move {
+		transition: none;
+	}
+}
+</style>

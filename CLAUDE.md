@@ -181,6 +181,19 @@ your mind about the week should not make a meal look freshly eaten.
 for "been a while". This is deliberate: a jotted idea resurfacing is the entire
 point of the Ideas tab.
 
+**A meal's ingredients keep the order they are put in.** Nothing sorts them —
+they are an array, written and read back in order — so that order is how the
+meal is written down, which for a recipe is how it is cooked. The shopping list
+merges across meals and is alphabetical, so it is untouched by this: reordering
+is about reading the meal, not shopping from it.
+
+The rows are dragged by a handle rather than by the row, which is the opposite
+of the shopping row's hold and for the opposite reason: a row here is a text
+field, and a press on a text field belongs to the caret. The handle is also a
+button, and ↑/↓ on it move the row a slot — a control that can only be worked by
+dragging cannot be worked without a pointer at all. `composables/useDragSort.ts`
+does the gesture, `lib/dragSort.ts` the arithmetic.
+
 **Ingredient merging is by normalized name** (trimmed, lowercased) — no fuzzy
 matching. "chicken thigh" and "chicken thighs" stay separate lines, and extras
 never merge with meal ingredients at all (their `qty` is free text, not
@@ -194,6 +207,54 @@ Each of these was a real bug. Do not reintroduce them.
 Proxy wrappers on nested arrays, and the structured clone algorithm rejects a
 Proxy — `DataCloneError` — in real browsers, not just under fake-indexeddb.
 Every write goes through `toPlain()` in `db/plain.ts`.
+
+**A drag's drop target is its leading edge against the slot's middle, not its
+centre against the other row's centre.** Centre-against-centre is the rule that
+sounds right and it breaks one direction silently: an ingredient row is twice
+the height with its store picker open, and a row taller than the one above it
+can never bring its centre level with that row's without being dragged off the
+top of the list — so it can never move up past it. Compare the dragged row's top
+edge going up and its bottom edge going down. Exactly one of those two
+comparisons may include the tie: they meet on the same pixel, and a tie
+satisfying both swaps a row down and back up for as long as it is held there,
+sixty times a second, because the drag runs off a frame loop.
+`lib/dragSort.spec.ts` sweeps every position of every row for that.
+
+**A drag whose handle is inside the thing being dragged cannot listen on the
+handle, and `setPointerCapture` does not rescue it either.** Both failures look
+like the drag freezing at speed and coming back to life when the cursor wanders
+back over the handle, which reads as a performance problem and is not one.
+
+- Listening on the handle works only while the pointer is over it. The row is
+  a frame behind the pointer by construction, so any flick leaves the handle
+  behind and the moves stop arriving.
+- Capture is the documented fix for that, and this drag drops it silently at
+  the first swap: reordering moves the row in the DOM, which takes the
+  capturing element out of the document for an instant, and an implicit release
+  is what that means.
+
+So the move/up listeners go on the window, keyed by `pointerId`. What capture
+would have bought is that the release lands on the handle rather than on
+whatever the cursor ended up over — which costs nothing here, because a `click`
+is dispatched only to the common ancestor of press and release, and no ancestor
+of these rows has a click handler. `ingredientOrder.spec.ts` releases the
+pointer on the window and requires the drag to end.
+
+**The dragged row keeps its slot in the layout.** It is displaced with a
+transform, never taken out of flow, which is what keeps the list measurable
+while the drag is happening — `offsetTop` on each row is its real slot, and it
+ignores the transform, so nothing has to unpick the drag's own displacement to
+work out where a row would land.
+
+**`<TransitionGroup>` decides whether a move can animate at all by cloning the
+FIRST child**, adding the move class to the clone and reading its transition
+back. So a move rule that switches itself off from a row's own attributes —
+`.ing-move[data-lifted] { transition: none }`, to keep the FLIP off the row the
+finger is positioning — switches the animation off for _every_ row whenever the
+top row is the one being dragged, which is exactly when a drag has just started.
+The clone is shallow, so the marker goes one level inside the row and the rule
+reads it with `:has()`. Vue's scoped-CSS rewriter leaves the inside of `:has()`
+alone, which is what makes that work from the parent's `<style scoped>`.
 
 **Never sort on derived week counts.** `weeksSince` returns `Infinity` for
 never-made meals, so `weeksSince(b) - weeksSince(a)` yields `NaN` for two of

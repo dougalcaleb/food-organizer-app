@@ -3,9 +3,10 @@
 Bottom sheet — the meal detail, meal editor, settings and the trip confirmation
 all use it.
 
-Per the handoff this is the only thing in the app that animates. The handoff's
-timings (backdrop 150ms, sheet rising 30px over 200ms, no fade) read as abrupt
-on a phone — a solid panel snapping up from the edge. It now fades as it rises,
+Per the handoff this was the only thing in the app that animates, and it is
+still the only screen-sized one — the other is an ingredient row sliding out of
+the way of one being dragged past it. The handoff's timings (backdrop 150ms,
+sheet rising 30px over 200ms, no fade) read as abrupt on a phone — a solid panel snapping up from the edge. It now fades as it rises,
 over a slightly longer decelerating curve, which reads as arriving rather than
 appearing.
 
