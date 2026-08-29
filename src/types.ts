@@ -68,6 +68,30 @@ export interface ExtraItem {
 	createdAt: number
 }
 
+/**
+ * Which of a planned meal's ingredients are currently on the shopping list.
+ *
+ * A planned meal does NOT put its ingredients on the list on its own: a meal
+ * often stays planned across several shopping trips, and re-buying its
+ * ingredients every trip is exactly what this record exists to stop. The list
+ * is still derived — this is one more input to the derivation, alongside the
+ * plan and the extras — but the derivation now asks "was this pulled?" rather
+ * than "is this planned?".
+ *
+ * One record per meal, deleted when the meal leaves the plan or when the last
+ * of its ingredients has been bought.
+ */
+export interface MealPull {
+	mealId: string
+	/**
+	 * Normalized ingredient names — `itemKey()` from lib/shoppingList, not the
+	 * display spelling. Matching by the same key the list merges on means
+	 * re-capitalizing an ingredient in the meal editor does not orphan its pull.
+	 */
+	names: string[]
+	pulledAt: number
+}
+
 export interface PlanEntry {
 	mealId: string
 	addedAt: number
@@ -111,7 +135,7 @@ export interface Settings {
 /** Seeded, not exhaustive — new tags are born by typing one in the editor. */
 export const DEFAULT_TAGS = ['Breakfast', 'Lunch', 'Dinner']
 
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 5
 
 export const DEFAULT_SETTINGS: Settings = {
 	id: 'app',

@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import { DEFAULT_TAGS } from '@/types'
-import type { CheckedItem, ExtraItem, Meal, PlanEntry, Settings } from '@/types'
+import type { CheckedItem, ExtraItem, Meal, MealPull, PlanEntry, Settings } from '@/types'
 
 /*
 IndexedDB is the only copy of this data, so schema changes must go through
@@ -14,6 +14,7 @@ export class AppDatabase extends Dexie {
 	meals!: EntityTable<Meal, 'id'>
 	extras!: EntityTable<ExtraItem, 'id'>
 	plan!: EntityTable<PlanEntry, 'mealId'>
+	pulls!: EntityTable<MealPull, 'mealId'>
 	checked!: EntityTable<CheckedItem, 'key'>
 	settings!: EntityTable<Settings, 'id'>
 
@@ -102,6 +103,57 @@ export class AppDatabase extends Dexie {
 						settings.schemaVersion = 4
 					}),
 			)
+
+		// v5 stops a planned meal putting its own ingredients on the shopping
+		// list. Ingredients are now PULLED onto the list a meal at a time, and a
+		// bought one does not come back while the meal stays planned. The state
+		// that records a pull is a new table.
+		//
+		// Everything currently planned had all of its ingredients on the list —
+		// that is what v4 meant — so the upgrade writes exactly that, and an
+		// existing install's list is unchanged on the first launch after it.
+		this.version(5)
+			.stores({
+				meals: 'id, name, lastMadeAt, archived, *tags',
+				extras: 'id, createdAt, kind',
+				plan: 'mealId, sortIndex',
+				pulls: 'mealId',
+				checked: 'key',
+				settings: 'id',
+			})
+			.upgrade(async (tx) => {
+				const [planned, meals] = await Promise.all([
+					tx.table<PlanEntry>('plan').toArray(),
+					tx.table<Meal>('meals').toArray(),
+				])
+
+				const byId = new Map(meals.map((meal) => [meal.id, meal]))
+				const now = Date.now()
+
+				await tx.table<MealPull>('pulls').bulkPut(
+					planned.flatMap((entry) => {
+						const meal = byId.get(entry.mealId)
+						if (!meal) return []
+
+						return [
+							{
+								mealId: entry.mealId,
+								// The same normalization `itemKey` applies, inlined:
+								// an upgrade step must not drift with the app's code.
+								names: [...new Set(meal.ingredients.map((i) => i.name.trim().toLowerCase()))],
+								pulledAt: now,
+							},
+						]
+					}),
+				)
+
+				await tx
+					.table<Settings>('settings')
+					.toCollection()
+					.modify((settings) => {
+						settings.schemaVersion = 5
+					})
+			})
 	}
 }
 

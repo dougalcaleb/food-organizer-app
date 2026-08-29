@@ -1,7 +1,12 @@
 <script setup lang="ts">
 /*
-The buying view. Everything here except one-offs and staples is derived from
-the plan — nothing on this screen is a list you maintain by hand.
+The buying view.
+
+Nothing lands here on its own. A one-off is typed in, a staple is tapped off the
+shelf, and a meal's ingredients are pulled across from the planned-meals section
+below — being planned is not enough, because a meal outlives a shopping trip and
+would otherwise be bought again every week. The list is still derived; what it
+is derived from now includes a record of what was put on it.
 
 Three kinds of line share it, and they behave differently once bought: see
 CartClearSheet.
@@ -12,6 +17,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import SegControl from '@/components/ui/SegControl.vue'
 import StorePicker from '@/components/ui/StorePicker.vue'
 import CartClearSheet from '@/components/list/CartClearSheet.vue'
+import PlannedMeals from '@/components/list/PlannedMeals.vue'
 import ShoppingRow from '@/components/list/ShoppingRow.vue'
 import StapleShelf from '@/components/list/StapleShelf.vue'
 import { extraIdFromKey } from '@/lib/shoppingList'
@@ -107,7 +113,7 @@ const confirmOpen = ref(false)
 		</section>
 
 		<p v-if="!list.groups.length" class="px-1 py-4 text-sm text-muted text-pretty">
-			Nothing to buy. Plan a meal, or add an item below.
+			Nothing to buy. Add a planned meal below, or type an item in.
 		</p>
 
 		<!-- Add a one-off -->
@@ -140,6 +146,8 @@ const confirmOpen = ref(false)
 		</section>
 
 		<StapleShelf />
+
+		<PlannedMeals />
 
 		<!-- In the cart -->
 		<section v-if="list.doneItems.length">

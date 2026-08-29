@@ -49,6 +49,11 @@ describe('jotting down a bare idea', () => {
 		})
 		await usePlanStore().add(meal.id)
 
+		// Planning alone buys nothing; pulling the meal onto the list is what
+		// does. A half-written idea has to survive that trip intact too.
+		expect(useListStore().items).toHaveLength(0)
+		await usePlanStore().pullAll(meal)
+
 		const item = useListStore().items[0]
 		expect(item.name).toBe('olive oil')
 		expect(item.qty).toBe('')

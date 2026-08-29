@@ -33,6 +33,7 @@ function backup(overrides: Partial<Backup> = {}): Backup {
 		meals: [],
 		extras: [],
 		plan: [],
+		pulls: [],
 		checked: [],
 		settings: [],
 		...overrides,

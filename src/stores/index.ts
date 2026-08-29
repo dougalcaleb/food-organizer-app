@@ -12,4 +12,13 @@ import { useSettingsStore } from './settings'
 export async function hydrateStores(): Promise<void> {
 	await useSettingsStore().hydrate()
 	await Promise.all([useMealsStore().hydrate(), usePlanStore().hydrate(), useListStore().hydrate()])
+
+	/*
+	Only now that every table is in can a checked key be judged orphaned —
+	before this line a key with no item might simply be waiting for its meal.
+	This is the sweep for anything that changed the list without going through
+	the List view: a meal unplanned on the Plan tab, or an ingredient renamed in
+	the editor, both of which can strand a key in the cart.
+	*/
+	await useListStore().clearOrphanedChecked()
 }

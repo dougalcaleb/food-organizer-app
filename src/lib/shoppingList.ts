@@ -1,13 +1,13 @@
 /*
 The shopping list is DERIVED, never stored. This module is a pure function of
-(meals, plan, extras) with no Vue and no database in sight, which is what makes
-it testable — and it is the part of the app most worth testing.
+(meals, plan, extras, pulls) with no Vue and no database in sight, which is what
+makes it testable — and it is the part of the app most worth testing.
 
 Ported from the design prototype's `buildItems` / `groups`, with one deliberate
 change: items merge on a normalized name (trimmed, lowercased) rather than on
 an exact string match, so "Bell Pepper" and "bell pepper" are one line.
 */
-import type { ExtraItem, ExtraKind, Meal, ShopView, Store } from '@/types'
+import type { ExtraItem, ExtraKind, Meal, MealPull, ShopView, Store } from '@/types'
 import { STORE_LABELS } from '@/types'
 import { sumQuantities } from './quantities'
 
@@ -76,15 +76,25 @@ function resolveStore(stores: Set<Store>): Store {
 }
 
 /**
- * Walk the planned meals, merge their ingredients by name, then append extras.
- * Sorted alphabetically.
+ * Walk the planned meals, merge their PULLED ingredients by name, then append
+ * extras. Sorted alphabetically.
+ *
+ * Being planned is not enough. A meal stays in the plan for as long as it is
+ * still a meal you mean to cook, which is routinely longer than the gap between
+ * shopping trips — so a plan-driven list re-buys the same chicken thighs every
+ * week. `pulls` is the record of which ingredients were actually put on the
+ * list, one meal at a time, and it is the only thing that puts a meal
+ * ingredient here. The plan still gates it, though: an ingredient pulled from a
+ * meal that has since left the plan is not bought for a meal nobody is cooking.
  */
 export function buildItems(
 	meals: readonly Meal[],
 	plan: readonly string[],
 	extras: readonly ExtraItem[],
+	pulls: readonly MealPull[],
 ): ListItem[] {
 	const byId = new Map(meals.map((meal) => [meal.id, meal]))
+	const pulledBy = new Map(pulls.map((pull) => [pull.mealId, new Set(pull.names)]))
 	const merged = new Map<
 		string,
 		{
@@ -102,8 +112,13 @@ export function buildItems(
 		const meal = byId.get(mealId)
 		if (!meal) continue
 
+		const pulled = pulledBy.get(mealId)
+		if (!pulled) continue
+
 		for (const ing of meal.ingredients) {
 			const key = itemKey(ing.name)
+			if (!pulled.has(key)) continue
+
 			let entry = merged.get(key)
 
 			if (!entry) {

@@ -4,6 +4,7 @@ import {
 	type CheckedItem,
 	type ExtraItem,
 	type Meal,
+	type MealPull,
 	type PlanEntry,
 	type Settings,
 } from '@/types'
@@ -21,15 +22,17 @@ export interface Backup {
 	meals: Meal[]
 	extras: ExtraItem[]
 	plan: PlanEntry[]
+	pulls: MealPull[]
 	checked: CheckedItem[]
 	settings: Settings[]
 }
 
 export async function exportBackup(): Promise<Backup> {
-	const [meals, extras, plan, checked, settings] = await Promise.all([
+	const [meals, extras, plan, pulls, checked, settings] = await Promise.all([
 		db.meals.toArray(),
 		db.extras.toArray(),
 		db.plan.toArray(),
+		db.pulls.toArray(),
 		db.checked.toArray(),
 		db.settings.toArray(),
 	])
@@ -41,6 +44,7 @@ export async function exportBackup(): Promise<Backup> {
 		meals,
 		extras,
 		plan,
+		pulls,
 		checked,
 		settings,
 	}
@@ -102,11 +106,14 @@ export async function restoreBackup(json: string): Promise<void> {
 
 	assertBackup(parsed)
 
-	await db.transaction('rw', [db.meals, db.extras, db.plan, db.checked, db.settings], async () => {
+	const tables = [db.meals, db.extras, db.plan, db.pulls, db.checked, db.settings]
+
+	await db.transaction('rw', tables, async () => {
 		await Promise.all([
 			db.meals.clear(),
 			db.extras.clear(),
 			db.plan.clear(),
+			db.pulls.clear(),
 			db.checked.clear(),
 			db.settings.clear(),
 		])
@@ -115,6 +122,11 @@ export async function restoreBackup(json: string): Promise<void> {
 			db.meals.bulkPut(parsed.meals),
 			db.extras.bulkPut(parsed.extras ?? []),
 			db.plan.bulkPut(parsed.plan ?? []),
+			// Absent in a pre-v5 backup, whose plan meant "every ingredient is on
+			// the list". Restoring that as no pulls at all is the safe direction:
+			// the meals are still planned and one tap puts them back, whereas
+			// inventing pulls would re-buy a trip that may already have happened.
+			db.pulls.bulkPut(parsed.pulls ?? []),
 			db.checked.bulkPut(parsed.checked ?? []),
 			db.settings.bulkPut(parsed.settings ?? []),
 		])

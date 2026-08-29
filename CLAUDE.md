@@ -36,9 +36,11 @@ structure, not its palette.
 ## Architecture
 
 **The shopping list is derived, never stored.** `lib/shoppingList.ts` is a pure
-function of `(meals, plan, extras)` — no Vue, no database. It is the most
+function of `(meals, plan, extras, pulls)` — no Vue, no database. It is the most
 load-bearing logic in the app and has the most tests. Never add a "shopping
-list" table.
+list" table. `pulls` is the newest input and the one most likely to be mistaken
+for that table: it is not a list of things to buy, it is a record of which
+planned meals have been _asked for_. See "Being planned does not buy anything".
 
 **Write-through repositories.** Store actions call a `db/repositories/*`
 function that writes the one changed record. Do _not_ deep-watch stores and
@@ -89,18 +91,55 @@ text beside it is inert. `list/ShoppingRow.spec.ts` clicks every part of the
 row that is not a button and asserts nothing is emitted, which also catches a
 handler put back on the row itself, since the clicks bubble.
 
+**Being planned does not buy anything.** A planned meal used to put every one
+of its ingredients on the shopping list for as long as it stayed planned, and
+that was wrong in a way no amount of tuning fixes: the plan is a rolling set of
+meals you still mean to cook, routinely held across two or three shopping
+trips, so its ingredients were re-derived and re-bought every week. The only
+escape was to unplan a meal you had not cooked — which is to say, to lie to the
+Plan tab to get a correct shopping list.
+
+So ingredients are **pulled** onto the list, a meal at a time, from the "From
+the plan" section under the staples shelf. `MealPull` is one record per meal
+holding the normalized names currently on the list; `plan.pulls` owns it,
+`buildItems` gates on it, and buying an ingredient releases it. The plan still
+gates the pull — an ingredient pulled from a meal that has since left the plan
+is not bought for a meal nobody is cooking — so both have to be true.
+
+The pull lives on the **plan** store, not the list store, for two reasons: its
+lifetime is exactly the plan entry's, and the list store already reads the plan,
+so the reverse import would close a cycle between them.
+
+`components/list/PlannedMeals.vue` is the section, `PlannedMealRow.vue` the row.
+A tap takes the whole meal; a tap on one already fully on the list takes it back
+off, which is the undo for a mis-tap; a hold opens the ingredients to pick a
+subset. That is the shopping row's gesture pair with the tap target inverted on
+purpose — **the whole row is tappable here**, because a stray tap adds
+ingredients visibly and reversibly, where a stray tap on a shopping row hides a
+line until you are home.
+
 **Three kinds of shopping line, three lifecycles.** Getting this wrong destroys
 data:
 
-| Kind                       | After a trip (`clearCart`)              |
-| -------------------------- | --------------------------------------- |
-| Meal ingredient            | Unchecked — the meal is still planned   |
-| One-off (`kind: 'oneoff'`) | **Deleted**                             |
-| Staple (`kind: 'staple'`)  | Returned to the shelf (`active: false`) |
+| Kind                       | After a trip (`clearCart`)                         |
+| -------------------------- | -------------------------------------------------- |
+| Meal ingredient            | **Pull released** — bought; the meal stays planned |
+| One-off (`kind: 'oneoff'`) | **Deleted**                                        |
+| Staple (`kind: 'staple'`)  | Returned to the shelf (`active: false`)            |
 
 `active` is what puts an extra on the current list; `buildItems` filters on it
 itself so no caller can forget. Clearing the cart is destructive, so the store
 exposes `cartClearPlan` and the UI confirms first.
+
+**A checked key can outlive the row it names, and that is only invisible until
+it is not.** The cart is `items` filtered by `checked`, so a key whose item
+stopped being derived — a meal taken back off the list, unplanned, or edited —
+shows nothing at all. It goes wrong the next time anything derives that same
+name: the row reappears already in the cart, which in a shop means walking past
+it. `list.clearOrphanedChecked()` sweeps them, called explicitly by every path
+that can shrink a pull and once by `hydrateStores` for everything else.
+Deliberately **not** a watcher on `items`: hydration fills the stores one at a
+time, and a watcher would see a half-loaded list and delete perfectly good keys.
 
 **Every kind of record needs a way to be created in the UI.** Staples shipped
 fully built — store, shelf, lifecycle, migration, tests — but nothing outside
@@ -199,6 +238,13 @@ matching. "chicken thigh" and "chicken thighs" stay separate lines, and extras
 never merge with meal ingredients at all (their `qty` is free text, not
 `amount` + `unit`). Known and accepted for now; revisit only with real usage.
 
+That normalized name is now doing a second job: **a pull stores the same key
+`itemKey()` produces**, not the display spelling, which is what lets a merged
+line released at the end of a trip resolve back to every meal that asked for it,
+and what stops re-capitalizing an ingredient in the editor orphaning its pull.
+The v4 → v5 upgrade inlines that normalization rather than importing it — an
+upgrade step is a fixed point in history and must not drift with the app's code.
+
 ## Gotchas found the hard way
 
 Each of these was a real bug. Do not reintroduce them.
@@ -245,6 +291,34 @@ transform, never taken out of flow, which is what keeps the list measurable
 while the drag is happening — `offsetTop` on each row is its real slot, and it
 ignores the transform, so nothing has to unpick the drag's own displacement to
 work out where a row would land.
+
+**A flex row wraps on each child's _hypothetical_ main size, and `flex-1` means
+`flex-basis: 0`.** So a `flex-1` child and a `w-full` panel "fit" on one line
+together — the panel takes the whole width, the flexible child collapses to a
+few characters, and the panel is painted over it. It looks like a styling
+accident and is a line-breaking rule. `ShoppingRow` survives it only because its
+fixed `w-11` checkbox and pin columns push the same line past 100% on their own;
+`PlannedMealRow` has no fixed column, so its one button has to be `w-full`.
+`components/list/wrappedRowLayout.spec.ts` pins both, as text — no test
+environment here implements layout, so mounting a row and measuring it would
+prove nothing.
+
+**Row padding plus a negative margin on a child is safe only until the row
+wraps.** It is the usual way to make a tap target reach a row's edges, and a
+negative margin makes the child's margin box smaller than its border box — so
+the child overflows its own flex line and the next line is drawn over its last
+line of text. Harmless on `ShoppingRow`, whose negative-margin child is an 18px
+checkbox that never fills its line; fatal on a child holding two lines of text.
+`PlannedMealRow` zeroes `.list-row`'s padding with `p-0` and gives it to the
+children instead.
+
+**Nothing may sit outside a component's root element — a comment counts.** A
+comment before the root makes the component multi-root, which silently costs it
+attribute fallthrough and leaves Vue Test Utils dispatching `trigger` at a
+fragment anchor rather than at the element carrying the handlers. The symptom is
+a gesture that works in the browser and stops arriving in the tests, which reads
+as a broken test. Reasoning about the root goes inside it, or in the script
+block.
 
 **`<TransitionGroup>` decides whether a move can animate at all by cloning the
 FIRST child**, adding the move class to the clone and reading its transition
@@ -668,6 +742,8 @@ Nothing from the original plan remains.
 
 Known open questions, deliberately unresolved pending real use: whether extras
 should merge with meal ingredients; whether never-made meals should dominate the
-"been a while" block; and the oddly-named large vendor chunks in the build
-output (Rollup naming a shared chunk after an arbitrary module — cosmetic, but
-worth tidying before precaching).
+"been a while" block; whether the Plan tab should show what each meal has on the
+shopping list, or whether keeping pulls entirely on the List tab is the right
+split; and the oddly-named large vendor chunks in the build output (Rollup
+naming a shared chunk after an arbitrary module — cosmetic, but worth tidying
+before precaching).

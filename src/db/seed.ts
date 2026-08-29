@@ -1,6 +1,7 @@
 import { bulkPutMeals } from '@/db/repositories/meals'
 import { addToPlan } from '@/db/repositories/plan'
 import { putExtra } from '@/db/repositories/extras'
+import { putPull } from '@/db/repositories/pulls'
 import { db } from '@/db'
 import type { ExtraItem, Ingredient, Meal } from '@/types'
 
@@ -240,6 +241,18 @@ const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000
 /** Meals planned out of the box, so the List tab has something to derive from. */
 const SEED_PLAN = ['curry', 'sausage', 'greek']
 
+/*
+Of the three planned meals, one has already been pulled onto the shopping list
+and one is half pulled, so the "From the plan" section shows all three of its
+states at once. A planned meal contributes nothing to the list until it is
+pulled, so seeding no pulls at all would leave the shopping list showing only
+the extras.
+*/
+const SEED_PULLS: Record<string, string[] | 'all'> = {
+	curry: 'all',
+	sausage: ['italian sausage', 'bell pepper'],
+}
+
 /**
  * Populate an empty database with sample data. No-ops if anything is already
  * stored, so it never clobbers real work.
@@ -254,8 +267,14 @@ export async function seedIfEmpty(): Promise<boolean> {
 export async function reseed(): Promise<void> {
 	const now = Date.now()
 
-	await db.transaction('rw', [db.meals, db.plan, db.extras, db.checked], async () => {
-		await Promise.all([db.meals.clear(), db.plan.clear(), db.extras.clear(), db.checked.clear()])
+	await db.transaction('rw', [db.meals, db.plan, db.pulls, db.extras, db.checked], async () => {
+		await Promise.all([
+			db.meals.clear(),
+			db.plan.clear(),
+			db.pulls.clear(),
+			db.extras.clear(),
+			db.checked.clear(),
+		])
 	})
 
 	const meals: Meal[] = SEED_MEALS.map((seed) => ({
@@ -274,6 +293,18 @@ export async function reseed(): Promise<void> {
 
 	for (const mealId of SEED_PLAN) {
 		await addToPlan(mealId)
+
+		const pulled = SEED_PULLS[mealId]
+		if (!pulled) continue
+
+		const meal = meals.find((m) => m.id === mealId)!
+		const names = pulled === 'all' ? meal.ingredients.map((i) => i.name) : pulled
+
+		await putPull({
+			mealId,
+			names: names.map((n) => n.trim().toLowerCase()),
+			pulledAt: now,
+		})
 	}
 
 	// One genuine one-off, plus a shelf of staples — two already on the list, the

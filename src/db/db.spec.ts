@@ -21,6 +21,7 @@ async function wipe() {
 		db.meals.clear(),
 		db.extras.clear(),
 		db.plan.clear(),
+		db.pulls.clear(),
 		db.checked.clear(),
 		db.settings.clear(),
 	])
@@ -74,7 +75,7 @@ describe('hydration', () => {
 		expect(await db.settings.get('app')).toMatchObject({ staleWeeks: 12 })
 	})
 
-	it('derives a shopping list from the seeded plan', async () => {
+	it('derives a shopping list from what the seeded plan has pulled', async () => {
 		await reseed()
 		await hydrateStores()
 
@@ -253,7 +254,7 @@ describe('clearing the cart', () => {
 
 		expect(plan.oneOffsToDelete.map((i) => i.name)).toEqual(['paper towels'])
 		expect(plan.staplesToShelve.map((i) => i.name)).toEqual(['coffee beans'])
-		expect(plan.ingredientsToUncheck).toHaveLength(1)
+		expect(plan.ingredientsBought).toHaveLength(1)
 	})
 
 	it('deletes bought one-offs outright', async () => {
@@ -273,12 +274,26 @@ describe('clearing the cart', () => {
 		expect(list.items.map((i) => i.name)).not.toContain('coffee beans')
 	})
 
-	it('only unchecks meal ingredients, since the meal is still planned', async () => {
+	/*
+	The change this whole feature exists for. A bought ingredient used to be
+	merely unchecked, so it reappeared on the list for as long as its meal stayed
+	planned — and a meal routinely stays planned across two or three trips.
+	*/
+	it('releases a bought ingredient from its meals, leaving the meal planned', async () => {
 		const { list, ingredient } = await checkOneOfEach()
+		const plan = usePlanStore()
+		const owners = ingredient.mealIds
+
 		await list.clearCart()
 
-		expect(list.openItems.map((i) => i.key)).toContain(ingredient.key)
+		expect(list.items.map((i) => i.key)).not.toContain(ingredient.key)
 		expect(list.doneItems).toHaveLength(0)
+
+		for (const mealId of owners) {
+			expect(plan.mealIds).toContain(mealId)
+			expect(plan.pulledNames(mealId)).not.toContain(ingredient.key)
+			expect((await db.pulls.get(mealId))?.names ?? []).not.toContain(ingredient.key)
+		}
 	})
 
 	it('leaves unchecked items completely alone', async () => {
@@ -286,9 +301,20 @@ describe('clearing the cart', () => {
 		const openBefore = list.openItems.length
 		await list.clearCart()
 
-		// Of the three checked items only the ingredient comes back: the one-off
-		// was deleted and the staple went to the shelf.
-		expect(list.openItems).toHaveLength(openBefore + 1)
+		// All three checked items leave: the one-off is deleted, the staple goes
+		// to the shelf, and the ingredient's pull is released.
+		expect(list.openItems).toHaveLength(openBefore)
+	})
+
+	it('puts a released ingredient back with one tap on its meal', async () => {
+		const { list, ingredient } = await checkOneOfEach()
+		const plan = usePlanStore()
+		const meal = useMealsStore().get(ingredient.mealIds[0])!
+
+		await list.clearCart()
+		await plan.pullAll(meal)
+
+		expect(list.openItems.map((i) => i.key)).toContain(ingredient.key)
 	})
 
 	it('uncheckAll is non-destructive', async () => {

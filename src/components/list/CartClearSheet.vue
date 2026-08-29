@@ -2,9 +2,10 @@
 /*
 Confirms finishing a shopping trip.
 
-Clearing the cart is destructive in an asymmetric way — one-offs are deleted
-outright while everything else is only unchecked or shelved — so it spells out
-exactly what will happen to each kind before doing it.
+Clearing the cart is destructive in an asymmetric way — a one-off is deleted
+outright, a staple goes back to the shelf, and a meal ingredient leaves the list
+without the meal leaving the plan — so it spells out what happens to each kind
+before doing it.
 */
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSheet from '@/components/ui/BaseSheet.vue'
@@ -41,14 +42,12 @@ async function confirm() {
 					</p>
 				</li>
 
-				<li v-if="list.cartClearPlan.ingredientsToUncheck.length">
-					<p class="label-micro mb-1">Just unchecked</p>
+				<li v-if="list.cartClearPlan.ingredientsBought.length">
+					<p class="label-micro mb-1">Off the list</p>
 					<p class="text-sm text-muted">
-						{{ list.cartClearPlan.ingredientsToUncheck.length }} meal
-						{{
-							list.cartClearPlan.ingredientsToUncheck.length === 1 ? 'ingredient' : 'ingredients'
-						}}
-						— still needed while their meals stay planned.
+						{{ list.cartClearPlan.ingredientsBought.length }} meal
+						{{ list.cartClearPlan.ingredientsBought.length === 1 ? 'ingredient' : 'ingredients' }}
+						— bought, so their meals stop asking for them. The meals stay planned.
 					</p>
 				</li>
 			</ul>

@@ -23,11 +23,16 @@ export const useListStore = defineStore('list', () => {
 
 	/*
 	The shopping list is derived on every read — never stored. Everything below
-	falls out of (meals, plan, extras).
+	falls out of (meals, plan, extras, pulls).
+
+	A planned meal contributes nothing on its own: its ingredients reach the list
+	only once they have been pulled onto it from the planned-meals section, and
+	buying them takes the pull away again. See `MealPull`.
 	*/
-	const items = computed(() =>
-		buildItems(useMealsStore().meals, usePlanStore().mealIds, extras.value),
-	)
+	const items = computed(() => {
+		const plan = usePlanStore()
+		return buildItems(useMealsStore().meals, plan.mealIds, extras.value, plan.pulls)
+	})
 
 	const openItems = computed(() => items.value.filter((i) => !checked.value.has(i.key)))
 	const doneItems = computed(() => items.value.filter((i) => checked.value.has(i.key)))
@@ -157,26 +162,33 @@ export const useListStore = defineStore('list', () => {
 	 *
 	 * The three kinds of line have genuinely different lifecycles: a bought
 	 * one-off is finished with, a staple goes back to the shelf until it is
-	 * needed again, and a meal ingredient just unchecks because the meal is
-	 * still planned.
+	 * needed again, and a bought meal ingredient leaves the list for good — the
+	 * meal stays planned, but it has already been shopped for, which is the
+	 * whole reason a pull exists.
 	 */
 	const cartClearPlan = computed(() => {
 		const done = doneItems.value
 
 		const oneOffsToDelete = done.filter((i) => i.extraKind === 'oneoff' && i.extraId)
 		const staplesToShelve = done.filter((i) => i.extraKind === 'staple' && i.extraId)
-		const ingredientsToUncheck = done.filter((i) => !i.isExtra)
+		const ingredientsBought = done.filter((i) => !i.isExtra)
 
-		return { oneOffsToDelete, staplesToShelve, ingredientsToUncheck }
+		return { oneOffsToDelete, staplesToShelve, ingredientsBought }
 	})
 
 	/**
 	 * Finish a shopping trip: delete bought one-offs, return bought staples to
-	 * the shelf, and uncheck everything else. Callers are expected to confirm
-	 * first — see `cartClearPlan`.
+	 * the shelf, release bought meal ingredients from their meals' pulls, and
+	 * uncheck everything. Callers are expected to confirm first — see
+	 * `cartClearPlan`.
+	 *
+	 * Releasing the pull is what stops the list repeating itself. A bought
+	 * ingredient used to be merely unchecked, so it came straight back for as
+	 * long as its meal stayed planned — which is longer than a week more often
+	 * than not.
 	 */
 	async function clearCart() {
-		const { oneOffsToDelete, staplesToShelve } = cartClearPlan.value
+		const { oneOffsToDelete, staplesToShelve, ingredientsBought } = cartClearPlan.value
 
 		const deleteIds = oneOffsToDelete.map((i) => i.extraId!)
 		const shelveIds = staplesToShelve.map((i) => i.extraId!)
@@ -191,7 +203,38 @@ export const useListStore = defineStore('list', () => {
 			extrasRepo.deleteExtras(deleteIds),
 			extrasRepo.setExtrasActive(shelveIds, false),
 			checkedRepo.clearChecked(),
+			// A merged item's key IS the normalized ingredient name, which is
+			// exactly what a pull stores — so this drops it from every meal that
+			// asked for it, not only the first.
+			usePlanStore().releasePulled(ingredientsBought.map((i) => i.key)),
 		])
+	}
+
+	/**
+	 * Drop checked keys that no longer name anything on the list.
+	 *
+	 * A checked key outlives its row whenever an ingredient stops being derived
+	 * while it is in the cart — a meal taken off the list again, unplanned, or
+	 * edited. The stale key is invisible at that moment, because the cart is
+	 * `items` filtered by `checked` and the item is gone. It becomes wrong the
+	 * next time anything derives that same name: the row reappears already in
+	 * the cart, which in a shop means walking past it.
+	 *
+	 * Deliberately explicit rather than a watcher on `items`: hydration fills
+	 * the stores one at a time, and a watcher would see a half-loaded list and
+	 * delete perfectly good keys. Callers run it after they have changed
+	 * something, and `hydrateStores` runs it once everything is in.
+	 */
+	async function clearOrphanedChecked() {
+		const live = new Set(items.value.map((i) => i.key))
+		const orphans = [...checked.value].filter((key) => !live.has(key))
+		if (!orphans.length) return
+
+		const updated = new Set(checked.value)
+		for (const key of orphans) updated.delete(key)
+		checked.value = updated
+
+		await Promise.all(orphans.map((key) => checkedRepo.setChecked(key, false)))
 	}
 
 	/** Uncheck everything without deleting or shelving anything. */
@@ -220,6 +263,7 @@ export const useListStore = defineStore('list', () => {
 		toggleStaple,
 		extraById,
 		clearCart,
+		clearOrphanedChecked,
 		uncheckAll,
 	}
 })

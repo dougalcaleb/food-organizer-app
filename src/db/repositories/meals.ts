@@ -14,10 +14,12 @@ export async function putMeal(meal: Meal): Promise<void> {
 
 export async function deleteMeal(id: string): Promise<void> {
 	// Soft delete: the meal leaves every list but keeps its history, and any
-	// plan entry pointing at it goes too.
-	await db.transaction('rw', db.meals, db.plan, async () => {
+	// plan entry pointing at it goes too — along with whatever it had pulled
+	// onto the shopping list, which nothing would ever derive again.
+	await db.transaction('rw', db.meals, db.plan, db.pulls, async () => {
 		await db.meals.update(id, { archived: true, updatedAt: Date.now() })
 		await db.plan.delete(id)
+		await db.pulls.delete(id)
 	})
 }
 

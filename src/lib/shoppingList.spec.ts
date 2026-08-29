@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { ExtraItem, Ingredient, Meal } from '@/types'
-import { buildItems, groupItems } from './shoppingList'
+import type { ExtraItem, Ingredient, Meal, MealPull } from '@/types'
+import { buildItems, groupItems, itemKey } from './shoppingList'
 
 function meal(id: string, name: string, ingredients: Ingredient[]): Meal {
 	return {
@@ -35,6 +35,28 @@ function extra(
 	return { id, name, qty, store, kind: 'oneoff', active: true, createdAt: 0, ...overrides }
 }
 
+/*
+Most of what follows is about merging, store resolution and grouping, none of
+which cares which ingredients were pulled onto the list — so these build with
+everything pulled, the way v4 behaved. The pull gate itself is tested on its
+own, further down, against `buildItems` directly.
+*/
+function pullEverything(meals: readonly Meal[]): MealPull[] {
+	return meals.map((meal) => ({
+		mealId: meal.id,
+		names: meal.ingredients.map((i) => itemKey(i.name)),
+		pulledAt: 0,
+	}))
+}
+
+function build(
+	meals: readonly Meal[],
+	plan: readonly string[],
+	extras: readonly ExtraItem[],
+): ReturnType<typeof buildItems> {
+	return buildItems(meals, plan, extras, pullEverything(meals))
+}
+
 const find = (items: ReturnType<typeof buildItems>, name: string) =>
 	items.find((i) => i.name.toLowerCase() === name)!
 
@@ -45,7 +67,7 @@ describe('buildItems — quantity merging', () => {
 			meal('b', 'Chili', [ing('coconut milk', 1, 'cans')]),
 		]
 
-		const items = buildItems(meals, ['a', 'b'], [])
+		const items = build(meals, ['a', 'b'], [])
 		expect(find(items, 'coconut milk').qty).toBe('3 cans')
 	})
 
@@ -55,7 +77,7 @@ describe('buildItems — quantity merging', () => {
 			meal('b', 'Chili', [ing('ground beef', 2, '')]),
 		]
 
-		const items = buildItems(meals, ['a', 'b'], [])
+		const items = build(meals, ['a', 'b'], [])
 		expect(find(items, 'ground beef').qty).toBe('1 lb + 2')
 	})
 
@@ -65,7 +87,7 @@ describe('buildItems — quantity merging', () => {
 			meal('b', 'Sausage', [ing('  bell pepper ', 3, '')]),
 		]
 
-		const items = buildItems(meals, ['a', 'b'], [])
+		const items = build(meals, ['a', 'b'], [])
 		expect(items).toHaveLength(1)
 		expect(items[0].name).toBe('Bell Pepper')
 		expect(items[0].qty).toBe('5')
@@ -77,7 +99,7 @@ describe('buildItems — quantity merging', () => {
 			meal('b', 'Shawarma', [ing('chicken thighs', 1.2, 'lb')]),
 		]
 
-		const items = buildItems(meals, ['a', 'b'], [])
+		const items = build(meals, ['a', 'b'], [])
 		expect(find(items, 'chicken thighs').qty).toBe('2.7 lb')
 	})
 })
@@ -89,7 +111,7 @@ describe('buildItems — store resolution', () => {
 			meal('b', 'Burrito', [ing('milk', 1, 'gal', 'costco')]),
 		]
 
-		expect(find(buildItems(meals, ['a', 'b'], []), 'milk').store).toBe('either')
+		expect(find(build(meals, ['a', 'b'], []), 'milk').store).toBe('either')
 	})
 
 	it('resolves a costco/walmart disagreement to `either`', () => {
@@ -98,7 +120,7 @@ describe('buildItems — store resolution', () => {
 			meal('b', 'Chili', [ing('ground beef', 2, 'lb', 'walmart')]),
 		]
 
-		expect(find(buildItems(meals, ['a', 'b'], []), 'ground beef').store).toBe('either')
+		expect(find(build(meals, ['a', 'b'], []), 'ground beef').store).toBe('either')
 	})
 
 	it('prefers a real store over `wherever`', () => {
@@ -107,12 +129,12 @@ describe('buildItems — store resolution', () => {
 			meal('b', 'Shawarma', [ing('cumin', 1, 'jar', 'walmart')]),
 		]
 
-		expect(find(buildItems(meals, ['a', 'b'], []), 'cumin').store).toBe('walmart')
+		expect(find(build(meals, ['a', 'b'], []), 'cumin').store).toBe('walmart')
 	})
 
 	it('keeps `wherever` when nothing else claims the item', () => {
 		const meals = [meal('a', 'Curry', [ing('thai basil', 1, 'bunch', 'wherever')])]
-		expect(find(buildItems(meals, ['a'], []), 'thai basil').store).toBe('wherever')
+		expect(find(build(meals, ['a'], []), 'thai basil').store).toBe('wherever')
 	})
 })
 
@@ -123,19 +145,19 @@ describe('buildItems — plan and extras', () => {
 			meal('b', 'Chili', [ing('beans', 3, 'cans')]),
 		]
 
-		const items = buildItems(meals, ['a'], [])
+		const items = build(meals, ['a'], [])
 		expect(items.map((i) => i.name)).toEqual(['rice'])
 	})
 
 	it('tolerates a plan referencing a deleted meal', () => {
 		const meals = [meal('a', 'Curry', [ing('rice', 1, 'bag')])]
-		expect(() => buildItems(meals, ['a', 'ghost'], [])).not.toThrow()
-		expect(buildItems(meals, ['a', 'ghost'], [])).toHaveLength(1)
+		expect(() => build(meals, ['a', 'ghost'], [])).not.toThrow()
+		expect(build(meals, ['a', 'ghost'], [])).toHaveLength(1)
 	})
 
 	it('appends extras with no meal association and sorts everything by name', () => {
 		const meals = [meal('a', 'Curry', [ing('rice', 1, 'bag')])]
-		const items = buildItems(meals, ['a'], [extra('e1', 'paper towels', '1 pack', 'costco')])
+		const items = build(meals, ['a'], [extra('e1', 'paper towels', '1 pack', 'costco')])
 
 		expect(items.map((i) => i.name)).toEqual(['paper towels', 'rice'])
 		expect(find(items, 'paper towels').isExtra).toBe(true)
@@ -144,7 +166,7 @@ describe('buildItems — plan and extras', () => {
 
 	it('combines an ingredient a single meal lists twice', () => {
 		const meals = [meal('a', 'Curry', [ing('olive oil', 1, 'tbsp'), ing('olive oil', 2, 'tbsp')])]
-		const items = buildItems(meals, ['a'], [])
+		const items = build(meals, ['a'], [])
 
 		expect(items).toHaveLength(1)
 		expect(items[0].qty).toBe('3 tbsp')
@@ -161,7 +183,7 @@ describe('groupItems — by store', () => {
 			ing('sandwich bread', 1, 'loaf', 'either'),
 		]),
 	]
-	const groups = groupItems(buildItems(meals, ['a'], []), 'store', meals, ['a'])
+	const groups = groupItems(build(meals, ['a'], []), 'store', meals, ['a'])
 	const names = (title: string) => groups.find((g) => g.title === title)!.items.map((i) => i.name)
 
 	it('orders groups Costco, Walmart, Wherever', () => {
@@ -184,11 +206,11 @@ describe('groupItems — by store', () => {
 
 	it('omits empty groups', () => {
 		const only = [meal('z', 'Rice', [ing('rice', 1, 'bag', 'costco')])]
-		expect(groupItems(buildItems(only, ['z'], []), 'store', only, ['z'])).toHaveLength(1)
+		expect(groupItems(build(only, ['z'], []), 'store', only, ['z'])).toHaveLength(1)
 	})
 
 	it('labels extras as one-off', () => {
-		const items = buildItems([], [], [extra('e1', 'paper towels', '1 pack', 'costco')])
+		const items = build([], [], [extra('e1', 'paper towels', '1 pack', 'costco')])
 		const g = groupItems(items, 'store', [], [])
 		expect(g[0].items[0].meta).toBe('one-off')
 	})
@@ -199,7 +221,7 @@ describe('groupItems — by meal', () => {
 		meal('a', 'Curry', [ing('bell pepper', 2, '', 'walmart')]),
 		meal('b', 'Sheet-pan sausage and peppers', [ing('bell pepper', 3, '', 'walmart')]),
 	]
-	const items = buildItems(meals, ['a', 'b'], [extra('e1', 'coffee', '2 bags', 'either')])
+	const items = build(meals, ['a', 'b'], [extra('e1', 'coffee', '2 bags', 'either')])
 	const groups = groupItems(items, 'meal', meals, ['a', 'b'])
 
 	it('makes one group per planned meal, in plan order, then One-offs', () => {
@@ -225,7 +247,7 @@ describe('groupItems — by meal', () => {
 
 	it('omits the "also for" clause when only one meal needs the item', () => {
 		const solo = [meal('a', 'Curry', [ing('rice', 1, 'bag', 'costco')])]
-		const g = groupItems(buildItems(solo, ['a'], []), 'meal', solo, ['a'])
+		const g = groupItems(build(solo, ['a'], []), 'meal', solo, ['a'])
 		expect(g[0].items[0].meta).toBe('Costco')
 	})
 })
@@ -233,7 +255,7 @@ describe('groupItems — by meal', () => {
 describe('groupItems — all', () => {
 	it('uses a single Everything group with store and meals in the meta', () => {
 		const meals = [meal('a', 'Curry', [ing('rice', 1, 'bag', 'costco')])]
-		const groups = groupItems(buildItems(meals, ['a'], []), 'all', meals, ['a'])
+		const groups = groupItems(build(meals, ['a'], []), 'all', meals, ['a'])
 
 		expect(groups).toHaveLength(1)
 		expect(groups[0].title).toBe('Everything')
@@ -241,7 +263,7 @@ describe('groupItems — all', () => {
 	})
 
 	it('marks extras as one-off with their store', () => {
-		const items = buildItems([], [], [extra('e1', 'coffee', '2 bags', 'either')])
+		const items = build([], [], [extra('e1', 'coffee', '2 bags', 'either')])
 		const groups = groupItems(items, 'all', [], [])
 		expect(groups[0].items[0].meta).toBe('one-off · Either')
 	})
@@ -254,7 +276,7 @@ describe('groupItems — all', () => {
 describe('forgiving entry', () => {
 	it('accepts an ingredient that is only a name', () => {
 		const meals = [meal('a', 'Curry', [{ name: 'olive oil' }])]
-		const items = buildItems(meals, ['a'], [])
+		const items = build(meals, ['a'], [])
 
 		expect(items).toHaveLength(1)
 		expect(items[0].name).toBe('olive oil')
@@ -264,12 +286,12 @@ describe('forgiving entry', () => {
 
 	it('treats a missing store as wherever', () => {
 		const meals = [meal('a', 'Curry', [{ name: 'olive oil' }])]
-		expect(buildItems(meals, ['a'], [])[0].store).toBe('wherever')
+		expect(build(meals, ['a'], [])[0].store).toBe('wherever')
 	})
 
 	it('renders a unit without an amount as the bare unit', () => {
 		const meals = [meal('a', 'Curry', [{ name: 'coconut milk', unit: 'cans' }])]
-		expect(buildItems(meals, ['a'], [])[0].qty).toBe('cans')
+		expect(build(meals, ['a'], [])[0].qty).toBe('cans')
 	})
 
 	it('lets a quantified meal win over an unquantified one when merging', () => {
@@ -278,7 +300,7 @@ describe('forgiving entry', () => {
 			meal('b', 'Chili', [{ name: 'coconut milk' }]),
 		]
 
-		const items = buildItems(meals, ['a', 'b'], [])
+		const items = build(meals, ['a', 'b'], [])
 		expect(items).toHaveLength(1)
 		// The vague entry adds nothing to the number but still links its meal.
 		expect(items[0].qty).toBe('2 cans')
@@ -287,7 +309,7 @@ describe('forgiving entry', () => {
 
 	it('still groups an unquantified ingredient correctly', () => {
 		const meals = [meal('a', 'Curry', [{ name: 'olive oil' }])]
-		const groups = groupItems(buildItems(meals, ['a'], []), 'store', meals, ['a'])
+		const groups = groupItems(build(meals, ['a'], []), 'store', meals, ['a'])
 
 		expect(groups.map((g) => g.title)).toEqual(['Wherever'])
 		expect(groups[0].items[0].meta).toBe('Curry')
@@ -295,7 +317,67 @@ describe('forgiving entry', () => {
 
 	it('handles a meal with no ingredients at all', () => {
 		const meals = [meal('a', 'Some thai thing', [])]
-		expect(buildItems(meals, ['a'], [])).toEqual([])
+		expect(build(meals, ['a'], [])).toEqual([])
 		expect(groupItems([], 'meal', meals, ['a'])).toEqual([])
+	})
+})
+
+/*
+The pull gate. Before this existed, being in the plan was what put an
+ingredient on the list — which meant a meal planned across two shopping trips
+was shopped for twice.
+*/
+describe('buildItems — pulled ingredients', () => {
+	const meals = [
+		meal('a', 'Curry', [ing('coconut milk', 2, 'cans'), ing('chicken thighs', 1.5, 'lb')]),
+		meal('b', 'Chili', [ing('coconut milk', 1, 'cans')]),
+	]
+
+	function pull(mealId: string, names: string[]): MealPull {
+		return { mealId, names, pulledAt: 0 }
+	}
+
+	it('leaves a planned meal off the list until it is pulled', () => {
+		expect(buildItems(meals, ['a'], [], [])).toEqual([])
+	})
+
+	it('includes only the ingredients actually pulled', () => {
+		const items = buildItems(meals, ['a'], [], [pull('a', ['coconut milk'])])
+		expect(items.map((i) => i.name)).toEqual(['coconut milk'])
+	})
+
+	it('still merges across meals, but only over what each one pulled', () => {
+		const items = buildItems(
+			meals,
+			['a', 'b'],
+			[],
+			[pull('a', ['coconut milk', 'chicken thighs']), pull('b', ['coconut milk'])],
+		)
+
+		expect(find(items, 'coconut milk').qty).toBe('3 cans')
+		expect(find(items, 'coconut milk').meals).toEqual(['Curry', 'Chili'])
+	})
+
+	it('drops a meal that pulled something and then left the plan', () => {
+		// The pull record can outlive the plan entry for a moment; the list must
+		// not buy for a meal nobody is cooking.
+		expect(buildItems(meals, [], [], [pull('a', ['coconut milk'])])).toEqual([])
+	})
+
+	it('ignores a pulled name the meal no longer has', () => {
+		const items = buildItems(meals, ['a'], [], [pull('a', ['coconut milk', 'saffron'])])
+		expect(items.map((i) => i.name)).toEqual(['coconut milk'])
+	})
+
+	it('matches the pull against the normalized name, not the spelling', () => {
+		const cased = [meal('a', 'Curry', [ing('Coconut Milk', 2, 'cans')])]
+		const items = buildItems(cased, ['a'], [], [pull('a', ['coconut milk'])])
+
+		expect(items.map((i) => i.name)).toEqual(['Coconut Milk'])
+	})
+
+	it('lets extras through with nothing pulled at all', () => {
+		const items = buildItems(meals, ['a'], [extra('e1', 'paper towels', '1 pack', 'costco')], [])
+		expect(items.map((i) => i.name)).toEqual(['paper towels'])
 	})
 })
