@@ -119,8 +119,17 @@ function onPick(name: string) {
 				:aria-pressed="isPulled(ing.name)"
 				@click="onPick(ing.name)"
 			>
+				<!--
+					`self-start`, not the row's baseline. A flex item's baseline comes
+					from its own content, and this box's content changes: empty when
+					unticked, an <svg> when ticked. Its baseline therefore moves the
+					moment it is checked, and the box visibly jogs up or down. Aligning
+					it to the line's top instead, with a static `mt-0.5` to centre it on
+					the first line of text, is what the meal row above already does —
+					the name and the amount still share a baseline with each other.
+				-->
 				<span
-					class="flex h-[15px] w-[15px] flex-none translate-y-0.5 items-center justify-center rounded-[5px] border"
+					class="mt-0.5 flex h-[15px] w-[15px] flex-none items-center justify-center self-start rounded-[5px] border"
 					:class="isPulled(ing.name) ? 'border-accent bg-accent text-on-accent' : 'border-subtle'"
 				>
 					<FaIcon v-if="isPulled(ing.name)" icon="check" class="text-[8px]" />

@@ -1,5 +1,9 @@
 /*
-Guards the layout rule that lets a `.list-row` carry a second flex line — the
+Guards the layout rules in the two shopping-list rows that nothing in a test
+environment can measure, because neither jsdom nor happy-dom implements layout.
+Each was a real bug that reads as a styling accident.
+
+First, the rule that lets a `.list-row` carry a second flex line — the
 ingredient picker under a planned meal, and the store picker under a shopping
 row.
 
@@ -24,8 +28,10 @@ line and the next line is drawn over its last line of text. ShoppingRow gets
 away with the same trick only because its negative-margin child is an 18px
 checkbox that never fills its line.
 
-Checked as text: neither jsdom nor happy-dom implements layout, so mounting
-these rows and measuring them would prove nothing at all.
+Second, a flex item's baseline comes from its own content, so an item whose
+content changes cannot be baseline-aligned without moving. The ingredient
+checkboxes are empty when unticked and hold an <svg> when ticked; on the row's
+`items-baseline` they jogged vertically on every tap.
 */
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
@@ -86,6 +92,33 @@ describe('PlannedMealRow', () => {
 		)
 
 		expect(negatives).toEqual([])
+	})
+})
+
+describe('checkboxes that change content', () => {
+	/*
+	Only the boxes that gain a tick matter. A row aligning its text on a shared
+	baseline is right — it is the box next to that text, whose own baseline moves
+	when it fills, that has to sit out.
+	*/
+	it('the ingredient box aligns to the top of its line, not to the baseline', () => {
+		const row = elementWith(PLANNED, '@click="onPick(ing.name)"')
+		const box = elementWith(
+			PLANNED,
+			"isPulled(ing.name) ? 'border-accent bg-accent text-on-accent' : 'border-subtle'",
+		)
+
+		// The names and their amounts do share a baseline, and should.
+		expect(row).toContain('items-baseline')
+
+		// The box must not, and must not be nudged by a transform either — that
+		// was the fudge covering for the moving baseline.
+		expect(box).toContain('self-start')
+		expect(box.filter((t) => t.startsWith('translate-y'))).toEqual([])
+	})
+
+	it('the meal box is on a row that never used the baseline at all', () => {
+		expect(elementWith(PLANNED, '@click="onTap"')).toContain('items-start')
 	})
 })
 
