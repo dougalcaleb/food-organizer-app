@@ -28,10 +28,12 @@ line and the next line is drawn over its last line of text. ShoppingRow gets
 away with the same trick only because its negative-margin child is an 18px
 checkbox that never fills its line.
 
-Second, a flex item's baseline comes from its own content, so an item whose
-content changes cannot be baseline-aligned without moving. The ingredient
-checkboxes are empty when unticked and hold an <svg> when ticked; on the row's
-`items-baseline` they jogged vertically on every tap.
+Second, a flex item's baseline comes from its own content, so a box whose
+content changes cannot be baseline-aligned without moving — and the ingredient
+checkboxes were empty when unticked and held an <svg> when ticked. Both halves
+are needed: the box sits out of the baseline (`self-start`), and its content
+stops changing at all (the tick is always rendered, only its opacity moves), so
+nothing about checking one can reach the layout in any engine.
 */
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
@@ -115,6 +117,23 @@ describe('checkboxes that change content', () => {
 		// was the fudge covering for the moving baseline.
 		expect(box).toContain('self-start')
 		expect(box.filter((t) => t.startsWith('translate-y'))).toEqual([])
+	})
+
+	it('the ingredient tick is always rendered, so the box never changes size', () => {
+		// Addressed by slicing rather than by a regex, on the house rule: a
+		// backslash does not survive a heredoc, and the word-boundary escape this
+		// wanted arrived as a backspace and matched nothing while reporting green.
+		const source = readFileSync(PLANNED, 'utf8')
+		const start = source.indexOf('<FaIcon', source.indexOf('@click="onPick(ing.name)"'))
+		expect(start).toBeGreaterThan(-1)
+
+		const tick = source.slice(start, source.indexOf('>', start))
+		expect(tick).toContain('icon="check"')
+
+		// A `v-if` here empties the box in one state and gives it an <svg> child
+		// in the other, which is the geometry change the opacity toggle avoids.
+		expect(tick).not.toContain('v-if')
+		expect(tick).toContain('opacity-0')
 	})
 
 	it('the meal box is on a row that never used the baseline at all', () => {

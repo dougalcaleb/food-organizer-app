@@ -120,19 +120,21 @@ function onPick(name: string) {
 				@click="onPick(ing.name)"
 			>
 				<!--
-					`self-start`, not the row's baseline. A flex item's baseline comes
-					from its own content, and this box's content changes: empty when
-					unticked, an <svg> when ticked. Its baseline therefore moves the
-					moment it is checked, and the box visibly jogs up or down. Aligning
-					it to the line's top instead, with a static `mt-0.5` to centre it on
-					the first line of text, is what the meal row above already does —
-					the name and the amount still share a baseline with each other.
+					Two rules, and this box needs both. Checking it must not change its
+					geometry: the tick is always rendered and only its opacity changes,
+					because a `v-if` makes the box empty in one state and gives it an
+					<svg> child in the other, and a flex item's baseline is computed
+					from its own content. And it must not sit on the row's baseline at
+					all — `self-start` with a static `mt-0.5` centres it on the first
+					line of text, the way the meal row above does it. The name and the
+					amount still share a baseline with each other, which is what
+					`items-baseline` on the row is for.
 				-->
 				<span
 					class="mt-0.5 flex h-[15px] w-[15px] flex-none items-center justify-center self-start rounded-[5px] border"
 					:class="isPulled(ing.name) ? 'border-accent bg-accent text-on-accent' : 'border-subtle'"
 				>
-					<FaIcon v-if="isPulled(ing.name)" icon="check" class="text-[8px]" />
+					<FaIcon icon="check" class="text-[8px]" :class="isPulled(ing.name) ? '' : 'opacity-0'" />
 				</span>
 
 				<span

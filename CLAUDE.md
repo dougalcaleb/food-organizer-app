@@ -312,14 +312,18 @@ checkbox that never fills its line; fatal on a child holding two lines of text.
 `PlannedMealRow` zeroes `.list-row`'s padding with `p-0` and gives it to the
 children instead.
 
-**A flex item's baseline comes from its own content, so an item whose content
-changes cannot be baseline-aligned.** A checkbox is empty when unticked and
-holds an `<svg>` when ticked; on an `items-baseline` row that moves its baseline
-and the box visibly jogs on every tap. The `translate-y` that looks like the fix
-is a fudge on a position that was never stable. Give the box `self-start` and a
-static `mt-*` sized to centre it on the first line of text — the words beside it
-can still share a baseline with each other, which is what that alignment is for.
-`components/list/wrappedRowLayout.spec.ts` pins it.
+**A checkbox must not change shape when it is ticked, and that takes two
+fixes.** A flex item's baseline is computed from its own content, so a box that
+is empty when unticked and holds an `<svg>` when ticked cannot be
+baseline-aligned without moving — and the `translate-y` that looks like the fix
+is a fudge on a position that was never stable. `self-start` plus a static
+`mt-*` sized to centre it on the first line of text takes the box out of the
+row's baseline; the words beside it still share a baseline with each other,
+which is what `items-baseline` is for. That alone was not enough: **render the
+tick unconditionally and toggle `opacity-0`**, so the box's content is identical
+in both states and nothing about checking one can reach the layout in any
+engine. A `v-if` on the tick is the thing to look for.
+`components/list/wrappedRowLayout.spec.ts` pins both halves.
 
 **Nothing may sit outside a component's root element — a comment counts.** A
 comment before the root makes the component multi-root, which silently costs it
