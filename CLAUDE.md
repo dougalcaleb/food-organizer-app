@@ -630,7 +630,7 @@ that as text. The client's "returned something unexpected" branch is the
 backstop for the same trap.
 
 **An empty database must never be uploaded.** The sequence: the browser evicts
-IndexedDB, the app opens empty, the weekly check fires, and nothing is written
+IndexedDB, the app opens empty, the scheduled check fires, and nothing is written
 over everything. `isSafeToUpload` refuses a backup with no meals, `uploadBackup`
 enforces it before touching the network, and the Lambda repeats the check —
 a client-side-only guard is one bad build away from gone. Bucket versioning is
@@ -704,7 +704,7 @@ and can only write the bucket and invalidate the one distribution.
 ## Cloud backup
 
 IndexedDB is still the only working copy of the data. The cloud backup is a
-second copy, not a sync: once a week at launch the app PUTs the same JSON
+second copy, not a sync: every three days, checked at launch, the app PUTs the same JSON
 `db/backup.ts` already produced to `/api/backup`, and a Lambda writes it to a
 versioned S3 bucket under one key. Nothing else reads it; restoring is always
 something the user asks for.

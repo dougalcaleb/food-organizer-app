@@ -262,7 +262,7 @@ async function resetToSeed() {
 				<div v-if="cloudConfigured" class="mt-5 border-t border-border pt-5">
 					<p class="label-micro mb-2">Cloud</p>
 					<p class="mb-3 text-meta text-subtle">
-						Backs itself up to AWS roughly once a week, on its own.
+						Backs itself up to AWS every few days, on its own.
 					</p>
 
 					<div class="flex gap-2">

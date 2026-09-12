@@ -31,7 +31,7 @@ export function cloudBackupConfigured(): boolean {
 	return token() !== ''
 }
 
-export const BACKUP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000
+export const BACKUP_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000
 
 export function backupIsDue(lastAt: number | null, now: number = Date.now()): boolean {
 	if (lastAt == null) return true
@@ -46,7 +46,7 @@ export function backupIsDue(lastAt: number | null, now: number = Date.now()): bo
  * The guard that keeps this a safety net rather than a way to lose everything.
  *
  * The sequence to worry about: the browser evicts IndexedDB, the app opens
- * empty, the weekly check fires, and an empty database is written over a good
+ * empty, the scheduled check fires, and an empty database is written over a good
  * backup. A new install has nothing worth storing anyway, so "no meals" is a
  * safe stand-in for "this database is not real yet". The Lambda repeats this
  * check, because a client-side-only guard is one bad build away from gone.

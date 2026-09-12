@@ -97,7 +97,7 @@ export function useCloudBackup() {
 
 /**
  * Called once from `main.ts` after mount. Never awaited by the boot sequence
- * and never throws: a weekly backup is not worth delaying first paint for, and
+ * and never throws: a scheduled backup is not worth delaying first paint for, and
  * a phone that happens to be offline at launch is the normal case, not a bug
  * to report. Settings shows the real last-backup date, and "Back up now" is
  * where a failure gets an error message.

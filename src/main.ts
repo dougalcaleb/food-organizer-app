@@ -38,7 +38,7 @@ async function bootstrap() {
 	await router.isReady()
 	app.mount('#app')
 
-	// Fire-and-forget, after mount and after hydration: a weekly backup is never
+	// Fire-and-forget, after mount and after hydration: a scheduled backup is never
 	// worth delaying first paint for, and it reads the database it is backing up.
 	void runCloudBackupOnLaunch()
 }
