@@ -9,6 +9,11 @@ misparse is immediately visible rather than silently wrong.
 
 The row can also be dragged into a new position by its handle. The editor owns
 the reordering — this component only reports the grab and paints the lift.
+
+`partClass` is the band of the part heading this row currently sits under. The
+row is not nested inside anything: parts are contiguous runs of one flat
+sortable list, so the only thing that can say "this belongs to the sauce" is the
+row's own colour.
 */
 import { computed, ref } from 'vue'
 import BaseChip from '@/components/ui/BaseChip.vue'
@@ -17,6 +22,11 @@ import { parseIngredient } from '@/lib/parseIngredient'
 import { STORE_LABELS, STORES, type Store } from '@/types'
 
 const props = defineProps<{
+	/**
+	 * Colour class for the part this row sits under, from `partClass()`. Absent
+	 * for a row in no part, which is every row until someone adds one.
+	 */
+	partClass?: string
 	/** Under the finger: displaced by the drag and drawn as picked up. */
 	lifted?: boolean
 	/** Pixels below its own slot the row is currently being held. */
@@ -48,6 +58,19 @@ defineExpose({
 	focus: () => input.value?.focus(),
 	focusHandle: () => handle.value?.focus(),
 })
+
+/*
+The root's border colour is one-sided on purpose — `border-b-border`, never
+`border-border`. An all-sides colour utility outranks `.part-band`'s left stripe,
+because Tailwind's utilities layer comes after its components layer, so the
+stripe silently goes gray while the wash behind the row survives and the band
+still reads as working.
+
+And nothing may sit outside the root element, a comment included: that is what
+this note is doing here rather than above it. A second root node makes the
+component a fragment, which costs it the `data-sortable` and `class` the editor
+passes in, and the drag then never starts.
+*/
 
 const parsed = computed(() => parseIngredient(text.value))
 
@@ -82,7 +105,7 @@ function pickStore(value: Store) {
 </script>
 
 <template>
-	<div class="border-b border-border last:border-b-0">
+	<div :class="['border-b border-b-border last:border-b-0', partClass && `part-band ${partClass}`]">
 		<!--
 			`data-lifted` marks a row the drag is positioning — under the finger or
 			settling out of it — for the editor's move animation, and it is

@@ -70,7 +70,8 @@ every component class in every state — use it as the feedback loop.
 
 **Domain rules live in `src/lib/`, not in components**, so they can be tested
 without mounting anything: `shoppingList`, `parseIngredient`, `mealDraft`
-(the save rule), `suggestions` (the "been a while" rule), `dates`, `quantities`.
+(the save rule), `mealIngredients` (a meal's parts, and merging what two of them
+both want), `suggestions` (the "been a while" rule), `dates`, `quantities`.
 When a view starts making a product decision, extract it here.
 
 ## Product rules that are easy to get wrong
@@ -233,6 +234,54 @@ button, and ↑/↓ on it move the row a slot — a control that can only be wor
 dragging cannot be worked without a pointer at all. `composables/useDragSort.ts`
 does the gesture, `lib/dragSort.ts` the arithmetic.
 
+**A recipe's parts are contiguous runs of one flat list, not a tree.** An
+ingredient can say which part of the meal it is for — `part?: 'Sauce'` — and the
+Ideas detail sheet wraps each run in its own colour. Four decisions hold this
+together, and undoing any one of them costs the drag:
+
+- **The part is a plain string on the ingredient**, not an id into a table of
+  parts. There is nothing to a part beyond its name, exactly as with a tag, and
+  a name cannot be orphaned by an edit somewhere else. Nothing stores the list
+  of parts a meal has: it is the parts its ingredients name.
+- **The array stays flat and stays in typed order**, so a part is a run in it.
+  That is what keeps `useDragSort` working on one list of rows — see the
+  ordering rule above — and it is why **moving an ingredient between parts is
+  the ordinary reorder** with nothing else to update.
+- **Membership is read off the position**, never stored twice. In the editor a
+  part is a HEADING ROW in the same sortable list, and `draftIngredients` stamps
+  each row with the heading above it. Dragging a heading therefore moves the
+  boundary rather than the part: pulled down past a row, it hands that row back
+  to whatever came before. There is deliberately no way to move a whole part as
+  a unit yet.
+- **Colour is derived, not stored.** `partColorSlots` numbers each part by where
+  its name first appears and `.part-1`…`.part-5` in `components.css` name the
+  bands, so the same part is the same colour in the editor and the viewer, and
+  retuning the palette is five lines of `theme.css` like everything else. None
+  of them is the accent — the accent already means "on the list" a few pixels
+  away.
+
+Parts are optional and have to stay optional: a meal with none is one unnamed
+group, which is the flat list every meal had before this existed, and
+`partGroups` returns exactly that so nothing needs a second code path. An empty
+heading is dropped on save and a heading left blank simply ends the part above
+it, which is also how a part is dissolved without touching an ingredient in it.
+
+**An ingredient two parts both want is written into both, and merged by name
+everywhere it is a thing to buy.** That is the whole answer to shared
+ingredients — no second model, no membership list. The shopping list already
+merged a meal's duplicate ingredients into one line with a summed quantity, and
+`mergeIngredients` in `lib/mealIngredients` is that same view of a single meal.
+Anything **counting or ticking off** a meal's ingredients must go through it:
+a pull records one normalized name per thing, so counting the rows instead
+leaves a meal whose ingredients are all on the list reading as one short of
+complete, forever. `MealCard`'s count, `PlannedMeals`' totals and
+`PlannedMealRow`'s picker all use it.
+
+**The shopping list does not respect parts at all.** It is grouped by store,
+because that is the order a shop is walked in; the parts are how the recipe is
+read. Nothing about a part reaches a `ListItem`, and `shoppingList.spec.ts`
+holds that line.
+
 **Ingredient merging is by normalized name** (trimmed, lowercased) — no fuzzy
 matching. "chicken thigh" and "chicken thighs" stay separate lines, and extras
 never merge with meal ingredients at all (their `qty` is free text, not
@@ -311,6 +360,19 @@ line of text. Harmless on `ShoppingRow`, whose negative-margin child is an 18px
 checkbox that never fills its line; fatal on a child holding two lines of text.
 `PlannedMealRow` zeroes `.list-row`'s padding with `p-0` and gives it to the
 children instead.
+
+**A one-sided border on a component class is erased by an all-sides border
+colour utility.** `.part-band`'s left stripe is `border-left: 3px solid
+var(--part-color)` in the components layer; `border-border` sets
+`border-color` on all four sides in the utilities layer, which comes after it.
+Every row carries that utility for its divider, so the stripe went gray while
+the wash behind it — a `background`, which nothing was competing for — stayed
+exactly right. That is what makes it expensive: the band reads as working.
+Worse, the detail sheet's FIRST group has no divider and so kept its colour,
+which makes it look like a palette bug in the colour cycling rather than a
+cascade problem. Use the one-sided colour utilities (`border-b-border`,
+`border-t-border`) anywhere a band is involved;
+`components/meal/ingredientParts.spec.ts` guards both screens.
 
 **A checkbox must not change shape when it is ticked, and that takes two
 fixes.** A flex item's baseline is computed from its own content, so a box that
@@ -548,6 +610,15 @@ broken migration corrupts real data on the user's next visit. See
 `db/migration.spec.ts`, which opens a genuine v1 database to exercise the
 upgrade path.
 
+What that does _not_ cover, and the boundary is worth being explicit about: a
+new **optional** field on an embedded object, where absence already means the
+right thing, changes no index and has nothing to backfill, so it needs neither a
+version nor an upgrade step. `Ingredient.part` is the case — an ingredient with
+no part is an ingredient in no part, which is every ingredient that existed
+before parts did, and `schemaVersion` stays honest at 5. A field that is
+indexed, required, or whose absence would be _misread_ is a schema change and
+takes the full treatment.
+
 **CloudFront's SPA error pages apply to the whole distribution.** `/api/backup`
 shares the distribution with the site, and `CustomErrorResponses` cannot be
 scoped to one behavior — so a 403 or 404 from the backup Lambda reaches the
@@ -757,6 +828,8 @@ Known open questions, deliberately unresolved pending real use: whether extras
 should merge with meal ingredients; whether never-made meals should dominate the
 "been a while" block; whether the Plan tab should show what each meal has on the
 shopping list, or whether keeping pulls entirely on the List tab is the right
-split; and the oddly-named large vendor chunks in the build output (Rollup
-naming a shared chunk after an arbitrary module — cosmetic, but worth tidying
-before precaching).
+split; whether a whole recipe part should be draggable as a unit (today a
+heading drags alone and moves the boundary, and reordering two parts means
+dragging their rows); and the oddly-named large vendor chunks in the build
+output (Rollup naming a shared chunk after an arbitrary module — cosmetic, but
+worth tidying before precaching).

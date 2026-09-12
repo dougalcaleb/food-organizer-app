@@ -7,6 +7,7 @@ forgotten ideas come back into view.
 import { computed } from 'vue'
 import BaseChip from '@/components/ui/BaseChip.vue'
 import { lastMadeLabel, weeksSince } from '@/lib/dates'
+import { mergeIngredients } from '@/lib/mealIngredients'
 import { usePlanStore } from '@/stores/plan'
 import { useSettingsStore } from '@/stores/settings'
 import type { Meal } from '@/types'
@@ -20,7 +21,9 @@ const isStale = computed(() => weeksSince(props.meal.lastMadeAt) >= settings.set
 const label = computed(() => lastMadeLabel(props.meal.lastMadeAt))
 
 const ingredientLine = computed(() => {
-	const count = props.meal.ingredients.length
+	// Merged, not raw: an ingredient two parts of the recipe both want is written
+	// into both, and counting it twice would overstate what the meal needs.
+	const count = mergeIngredients(props.meal.ingredients).length
 	if (!count) return 'no ingredients yet'
 	return `${count} ingredient${count === 1 ? '' : 's'}`
 })

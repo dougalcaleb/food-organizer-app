@@ -26,6 +26,16 @@ export interface Ingredient {
 	/** Empty or absent for countable things ("3 bell pepper"). */
 	unit?: string
 	store?: Store
+	/**
+	 * Which part of the recipe this is for — "Sauce", "Marinade". Absent, which
+	 * is the default and stays the default, means the meal is one flat list.
+	 *
+	 * A name rather than an id into a table of parts: there is nothing to a part
+	 * beyond what it is called, and a plain string cannot be orphaned. Parts are
+	 * contiguous runs of this array, never a nesting of it — see
+	 * `lib/mealIngredients`. The shopping list ignores this entirely.
+	 */
+	part?: string
 }
 
 export interface Meal {

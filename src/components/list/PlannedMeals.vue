@@ -22,6 +22,7 @@ is what a second tap on a half-added meal is asking for.
 */
 import { computed, ref } from 'vue'
 import PlannedMealRow from '@/components/list/PlannedMealRow.vue'
+import { mergeIngredients } from '@/lib/mealIngredients'
 import { useListStore } from '@/stores/list'
 import { usePlanStore } from '@/stores/plan'
 import type { Meal } from '@/types'
@@ -33,12 +34,20 @@ const open = ref(true)
 /** Meal ids whose ingredient picker is showing. */
 const expanded = ref(new Set<string>())
 
-/** How much of each planned meal is currently on the list. */
+/*
+How much of each planned meal is currently on the list.
+
+Counted over the MERGED ingredients, because a pull is recorded per normalized
+name: a recipe whose sauce and marinade both want lime has one lime to buy and
+one name in the pull, and counting the rows instead would leave the meal
+permanently one short of complete.
+*/
 const rows = computed(() =>
 	plan.plannedMeals.map((meal) => {
 		const pulled = plan.pulledNames(meal.id)
-		const total = meal.ingredients.length
-		const on = meal.ingredients.filter((i) => pulled.includes(i.name.trim().toLowerCase())).length
+		const merged = mergeIngredients(meal.ingredients)
+		const total = merged.length
+		const on = merged.filter((i) => pulled.includes(i.key)).length
 
 		return { meal, pulled, total, on, all: total > 0 && on === total }
 	}),

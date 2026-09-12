@@ -172,6 +172,23 @@ const textRoles = [
 		</section>
 
 		<section>
+			<h2 class="label-section mb-3">Recipe parts</h2>
+			<p class="mb-3 text-meta text-subtle">
+				The band that gathers the ingredients of one part of a recipe. Colour comes from the part's
+				name, cycling through five slots — see lib/mealIngredients.
+			</p>
+			<div class="overflow-hidden rounded-card bg-surface">
+				<div v-for="n in 5" :key="n" :class="`part-band part-${n}`">
+					<p class="part-name px-3 pt-2 pb-0.5">Part {{ n }}</p>
+					<div class="flex items-baseline gap-2.5 px-3 pb-2">
+						<span class="flex-1 text-sm">fish sauce</span>
+						<span class="font-heading text-[13px] font-semibold text-accent">2 tbsp</span>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section>
 			<h2 class="label-section mb-3">Radii</h2>
 			<div class="flex flex-wrap gap-3">
 				<div

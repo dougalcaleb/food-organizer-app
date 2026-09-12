@@ -12,9 +12,11 @@ import { computed, nextTick, ref, watch, type ComponentPublicInstance } from 'vu
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseChip from '@/components/ui/BaseChip.vue'
 import BaseSheet from '@/components/ui/BaseSheet.vue'
+import IngredientPartRow from '@/components/meal/IngredientPartRow.vue'
 import IngredientRow from '@/components/meal/IngredientRow.vue'
 import { useDragSort } from '@/composables/useDragSort'
 import { moveItem } from '@/lib/dragSort'
+import { partClass, partColorSlots, partGroups } from '@/lib/mealIngredients'
 import { formatIngredient } from '@/lib/parseIngredient'
 import { draftHasContent, draftToPayload, type MealDraft } from '@/lib/mealDraft'
 import { useMealsStore } from '@/stores/meals'
@@ -29,15 +31,33 @@ const meals = useMealsStore()
 const plan = usePlanStore()
 const settings = useSettingsStore()
 
+/*
+One row of the editor's ingredient list, which holds both ingredients and the
+part headings that group them — "Sauce", and everything under it until the next
+heading.
+
+One flat list with one row type, deliberately. The list is sortable, and making
+a part a container around its rows would mean the drag had to move rows between
+two different lists; as siblings, dragging a row into another part is exactly
+the same gesture as dragging it up one slot, and membership is simply read back
+off the order. `text` is whatever was typed in the row — an ingredient or a part
+name — because everything holding the rows treats them alike: the drag, the
+focus map, and Enter moving to the next one.
+*/
 interface RowDraft {
 	key: number
+	kind: 'ingredient' | 'part'
 	text: string
 	store: Store | undefined
 }
 
 let nextKey = 0
 function makeRow(text = '', store?: Store): RowDraft {
-	return { key: nextKey++, text, store }
+	return { key: nextKey++, kind: 'ingredient', text, store }
+}
+
+function makePart(name = ''): RowDraft {
+	return { key: nextKey++, kind: 'part', text: name, store: undefined }
 }
 
 const name = ref('')
@@ -58,8 +78,13 @@ watch(
 		name.value = meal?.name ?? ''
 		notes.value = meal?.notes ?? ''
 		tags.value = [...(meal?.tags ?? [])]
+		// Parts come back as the headings they were typed as: a heading before each
+		// run of ingredients sharing one, and nothing at all for a meal with none.
 		rows.value = meal?.ingredients.length
-			? meal.ingredients.map((ing) => makeRow(formatIngredient(ing), ing.store))
+			? partGroups(meal.ingredients).flatMap((group) => [
+					...(group.part ? [makePart(group.part)] : []),
+					...group.ingredients.map((ing) => makeRow(formatIngredient(ing), ing.store)),
+				])
 			: [makeRow()]
 	},
 	{ immediate: true },
@@ -114,6 +139,22 @@ function addRow() {
 	void focusRow(row.key)
 }
 
+/**
+ * Adds a part heading at the end, for the same reason and with the same focus:
+ * a heading nobody has named yet is not a part at all, so the cursor has to
+ * land in it.
+ */
+function addPart() {
+	const row = makePart()
+	rows.value.push(row)
+	void focusRow(row.key)
+}
+
+/**
+ * Removing a heading dissolves the part without touching a single ingredient in
+ * it — the rows below simply belong to whatever came before. That is the undo
+ * for adding one by mistake, and it is why there is no confirmation here.
+ */
 function removeRow(key: number) {
 	rows.value = rows.value.filter((row) => row.key !== key)
 	// Deliberately not `addRow`: replacing the last row is not a request to type,
@@ -133,6 +174,31 @@ function onRowEnter(key: number) {
 	if (next) void focusRow(next.key)
 	else addRow()
 }
+
+/* ── Parts ────────────────────────────────────────────────────────────── */
+
+/*
+Which part each row currently sits in, and the colour that says so.
+
+Read off the order every time rather than stored on the rows: the order is the
+only thing a drag changes, so anything derived from it cannot fall out of step
+with it. Colour comes from the part's name, not its position, so a part keeps
+its colour while it is being dragged past another one.
+*/
+const decorated = computed(() => {
+	const slots = partColorSlots(
+		rows.value.map((row) => (row.kind === 'part' ? row.text.trim() : undefined)),
+	)
+
+	let current: string | undefined
+
+	return rows.value.map((row) => {
+		if (row.kind === 'part') current = row.text.trim() || undefined
+
+		const slot = current ? slots.get(current) : undefined
+		return { row, partClass: slot ? partClass(slot) : undefined }
+	})
+})
 
 /* ── Ordering ─────────────────────────────────────────────────────────── */
 
@@ -185,7 +251,11 @@ const draft = computed<MealDraft>(() => ({
 	name: name.value,
 	notes: notes.value,
 	tags: tags.value,
-	rows: rows.value.map(({ text, store }) => ({ text, store })),
+	items: rows.value.map((row) =>
+		row.kind === 'part'
+			? { kind: 'part' as const, name: row.text }
+			: { kind: 'ingredient' as const, text: row.text, store: row.store },
+	),
 }))
 
 const hasContent = computed(() => draftHasContent(draft.value))
@@ -266,33 +336,70 @@ const isPlanned = computed(() => (props.mealId ? plan.isPlanned(props.mealId) : 
 					A TransitionGroup so the rows a drag displaces slide out of its way
 					rather than teleporting. `relative` is not decoration: the rows are
 					measured with `offsetTop`, which needs this to be their offset parent.
+
+					`overflow-hidden` so a part band's stripe is clipped to the card's
+					own corners, and no horizontal padding on the container: the band has
+					to reach the edge to read as wrapping the rows, so the inset is on
+					the rows instead.
+
+					Headings and ingredients are one keyed list, not two, because the drag
+					measures this element's children and the order of those children IS
+					which part each ingredient belongs to.
 				-->
 				<TransitionGroup
 					tag="div"
 					name="ing"
-					class="relative rounded-card bg-surface px-2"
+					class="relative overflow-hidden rounded-card bg-surface"
 					:class="{ 'select-none': draggedIndex !== -1 }"
 				>
-					<IngredientRow
-						v-for="(row, index) in rows"
-						:ref="(el) => setRowRef(row.key, el)"
-						:key="row.key"
-						v-model:text="row.text"
-						v-model:store="row.store"
-						data-sortable
-						:lifted="draggedIndex === index && !dragSettling"
-						:offset="draggedIndex === index ? dragOffset : 0"
-						:settling="draggedIndex === index && dragSettling"
-						@remove="removeRow(row.key)"
-						@enter="onRowEnter(row.key)"
-						@grab="grabRow"
-						@nudge="nudgeRow(index, $event)"
-					/>
+					<template v-for="(entry, index) in decorated" :key="entry.row.key">
+						<IngredientPartRow
+							v-if="entry.row.kind === 'part'"
+							:ref="(el) => setRowRef(entry.row.key, el)"
+							v-model:name="entry.row.text"
+							data-sortable
+							class="px-2"
+							:part-class="entry.partClass"
+							:lifted="draggedIndex === index && !dragSettling"
+							:offset="draggedIndex === index ? dragOffset : 0"
+							:settling="draggedIndex === index && dragSettling"
+							@remove="removeRow(entry.row.key)"
+							@enter="onRowEnter(entry.row.key)"
+							@grab="grabRow"
+							@nudge="nudgeRow(index, $event)"
+						/>
+						<IngredientRow
+							v-else
+							:ref="(el) => setRowRef(entry.row.key, el)"
+							v-model:text="entry.row.text"
+							v-model:store="entry.row.store"
+							data-sortable
+							class="px-2"
+							:part-class="entry.partClass"
+							:lifted="draggedIndex === index && !dragSettling"
+							:offset="draggedIndex === index ? dragOffset : 0"
+							:settling="draggedIndex === index && dragSettling"
+							@remove="removeRow(entry.row.key)"
+							@enter="onRowEnter(entry.row.key)"
+							@grab="grabRow"
+							@nudge="nudgeRow(index, $event)"
+						/>
+					</template>
 				</TransitionGroup>
-				<BaseButton variant="ghost" class="mt-2" @click="addRow">
-					<FaIcon icon="plus" />
-					Add ingredient
-				</BaseButton>
+				<div class="mt-2 flex gap-1">
+					<BaseButton variant="ghost" @click="addRow">
+						<FaIcon icon="plus" />
+						Add ingredient
+					</BaseButton>
+					<!--
+						Optional, and it has to look optional: a meal is a flat list until
+						somebody decides it has parts, and most never will.
+					-->
+					<BaseButton variant="ghost" @click="addPart">
+						<FaIcon icon="plus" />
+						Add part
+					</BaseButton>
+				</div>
 			</section>
 
 			<section class="mb-6">

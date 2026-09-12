@@ -20,7 +20,7 @@ the hold simply stops arriving.
 */
 import { computed } from 'vue'
 import { useLongPress } from '@/composables/useLongPress'
-import { fmtQty } from '@/lib/quantities'
+import { mergeIngredients } from '@/lib/mealIngredients'
 import type { Meal } from '@/types'
 
 const props = defineProps<{
@@ -33,20 +33,28 @@ const props = defineProps<{
 
 const emit = defineEmits<{ tap: []; hold: []; pick: [name: string] }>()
 
+/*
+Things to buy, not rows of the recipe. An ingredient that two parts of the meal
+both want is written into both of them, and a pull records one normalized name
+per thing — so merging here is what keeps the picker's ticks, the row's
+completeness and the line that ends up on the list all talking about the same
+set. Unmerged, a shared ingredient would show twice, tick twice at once, and
+leave the meal one short of "all on the list" forever.
+*/
+const items = computed(() => mergeIngredients(props.meal.ingredients))
+
 // A meal with no ingredients has nothing to open, so it takes neither gesture:
 // its tap button is disabled, and a hold that revealed an empty panel would
 // read as the app hanging on the vibration.
 const press = useLongPress(() => {
-	if (props.meal.ingredients.length) emit('hold')
+	if (items.value.length) emit('hold')
 })
 
 /** All of them on the list — the state where a tap takes them back off again. */
-const all = computed(
-	() => props.meal.ingredients.length > 0 && props.pulled.length >= props.meal.ingredients.length,
-)
+const all = computed(() => items.value.length > 0 && props.pulled.length >= items.value.length)
 
-function isPulled(name: string): boolean {
-	return props.pulled.includes(name.trim().toLowerCase())
+function isPulled(key: string): boolean {
+	return props.pulled.includes(key)
 }
 
 // The hold's own release still arrives as a click. Without this, holding a row
@@ -87,7 +95,7 @@ function onPick(name: string) {
 			type="button"
 			class="flex w-full items-start gap-3 px-3 py-2.75 text-left"
 			:aria-pressed="all"
-			:disabled="!meal.ingredients.length"
+			:disabled="!items.length"
 			@click="onTap"
 		>
 			<span
@@ -110,14 +118,14 @@ function onPick(name: string) {
 			what says they belong to it: the row's padding, plus the checkbox, plus
 			the gap after it.
 		-->
-		<div v-if="expanded && meal.ingredients.length" class="w-full pr-3 pb-2.5 pl-10.5">
+		<div v-if="expanded && items.length" class="w-full pr-3 pb-2.5 pl-10.5">
 			<button
-				v-for="(ing, i) in meal.ingredients"
-				:key="i"
+				v-for="item in items"
+				:key="item.key"
 				type="button"
 				class="flex w-full items-baseline gap-2.5 py-1.5 text-left"
-				:aria-pressed="isPulled(ing.name)"
-				@click="onPick(ing.name)"
+				:aria-pressed="isPulled(item.key)"
+				@click="onPick(item.name)"
 			>
 				<!--
 					Two rules, and this box needs both. Checking it must not change its
@@ -132,24 +140,24 @@ function onPick(name: string) {
 				-->
 				<span
 					class="mt-0.5 flex h-[15px] w-[15px] flex-none items-center justify-center self-start rounded-[5px] border"
-					:class="isPulled(ing.name) ? 'border-accent bg-accent text-on-accent' : 'border-subtle'"
+					:class="isPulled(item.key) ? 'border-accent bg-accent text-on-accent' : 'border-subtle'"
 				>
-					<FaIcon icon="check" class="text-[8px]" :class="isPulled(ing.name) ? '' : 'opacity-0'" />
+					<FaIcon icon="check" class="text-[8px]" :class="isPulled(item.key) ? '' : 'opacity-0'" />
 				</span>
 
 				<span
 					class="min-w-0 flex-1 text-sm leading-snug"
-					:class="isPulled(ing.name) ? '' : 'text-muted'"
+					:class="isPulled(item.key) ? '' : 'text-muted'"
 				>
-					{{ ing.name }}
+					{{ item.name }}
 				</span>
 
 				<span
-					v-if="fmtQty(ing.amount, ing.unit)"
+					v-if="item.qty"
 					class="flex-none font-heading text-meta font-semibold whitespace-nowrap"
-					:class="isPulled(ing.name) ? 'text-accent' : 'text-subtle'"
+					:class="isPulled(item.key) ? 'text-accent' : 'text-subtle'"
 				>
-					{{ fmtQty(ing.amount, ing.unit) }}
+					{{ item.qty }}
 				</span>
 			</button>
 		</div>

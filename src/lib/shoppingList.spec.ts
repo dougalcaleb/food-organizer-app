@@ -381,3 +381,41 @@ describe('buildItems — pulled ingredients', () => {
 		expect(items.map((i) => i.name)).toEqual(['paper towels'])
 	})
 })
+
+describe('the parts of a recipe, which the shopping list does not have', () => {
+	/*
+	A meal can group its ingredients into the parts it is cooked in — "Sauce",
+	"Marinade". That is how the recipe is read; it is not how a shop is walked.
+	The list is grouped by store, and an ingredient two parts both want is one
+	thing in the trolley.
+	*/
+	it('ignores the part an ingredient belongs to', () => {
+		const sauce = meal('m1', 'Larb', [
+			{ ...ing('fish sauce', 2, 'tbsp'), part: 'Sauce' },
+			{ ...ing('pork', 1, 'lb'), part: 'Base' },
+		])
+
+		const items = build([sauce], ['m1'], [])
+
+		expect(items.map((i) => i.name)).toEqual(['fish sauce', 'pork'])
+		// Nothing about a part reaches a list item — not as a field, not as a group.
+		expect(items.every((i) => !('part' in i))).toBe(true)
+	})
+
+	it('merges an ingredient two parts of one meal both want', () => {
+		// This is the answer to "what about the lime in the sauce AND the garnish":
+		// write it in both, and buy it once. The amounts add up.
+		const shared = meal('m1', 'Larb', [
+			{ ...ing('lime', 2, ''), part: 'Sauce' },
+			{ ...ing('lime', 1, ''), part: 'Garnish' },
+		])
+
+		const items = build([shared], ['m1'], [])
+
+		expect(items).toHaveLength(1)
+		expect(items[0].qty).toBe('3')
+		// One line, so one key — which is also the one name a pull records, and the
+		// one checkbox that takes it off the list.
+		expect(items[0].key).toBe('lime')
+	})
+})

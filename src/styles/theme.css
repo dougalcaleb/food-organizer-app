@@ -33,6 +33,17 @@ Because these live in Tailwind's `@theme`, each one generates utilities:
 	--color-accent-muted:   var(--color-teal-3);
 	--color-accent-soft:    var(--color-teal-1); /* tinted fills, "been a while" rows */
 
+	/* ── Recipe parts ─────────────────────────────────────────────────────
+	   The band colours for a meal's ingredient parts ("Sauce", "Marinade").
+	   Cycled by position, never stored on the data — see lib/mealIngredients.
+	   Deliberately none of them the accent: a part is a label, and the accent
+	   already means "on the list" a few pixels away. */
+	--color-part-1:         var(--color-purple-4);
+	--color-part-2:         var(--color-yellow-2);
+	--color-part-3:         var(--color-green-6);
+	--color-part-4:         var(--color-red-3);
+	--color-part-5:         var(--color-blue-2);
+
 	/* ── Semantic ─────────────────────────────────────────────────────── */
 	--color-stale:          var(--color-yellow-1); /* "been a while" emphasis */
 	--color-danger:         var(--color-red-4); /* destructive actions */

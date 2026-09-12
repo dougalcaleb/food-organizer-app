@@ -82,7 +82,7 @@ describe('PlannedMealRow', () => {
 		expect(button).toContain('w-full')
 		expect(button).not.toContain('flex-1')
 
-		const panel = elementWith(PLANNED, 'v-if="expanded && meal.ingredients.length"')
+		const panel = elementWith(PLANNED, 'v-if="expanded && items.length"')
 		expect(panel).toContain('w-full')
 	})
 
@@ -104,10 +104,10 @@ describe('checkboxes that change content', () => {
 	when it fills, that has to sit out.
 	*/
 	it('the ingredient box aligns to the top of its line, not to the baseline', () => {
-		const row = elementWith(PLANNED, '@click="onPick(ing.name)"')
+		const row = elementWith(PLANNED, '@click="onPick(item.name)"')
 		const box = elementWith(
 			PLANNED,
-			"isPulled(ing.name) ? 'border-accent bg-accent text-on-accent' : 'border-subtle'",
+			"isPulled(item.key) ? 'border-accent bg-accent text-on-accent' : 'border-subtle'",
 		)
 
 		// The names and their amounts do share a baseline, and should.
@@ -124,7 +124,7 @@ describe('checkboxes that change content', () => {
 		// backslash does not survive a heredoc, and the word-boundary escape this
 		// wanted arrived as a backspace and matched nothing while reporting green.
 		const source = readFileSync(PLANNED, 'utf8')
-		const start = source.indexOf('<FaIcon', source.indexOf('@click="onPick(ing.name)"'))
+		const start = source.indexOf('<FaIcon', source.indexOf('@click="onPick(item.name)"'))
 		expect(start).toBeGreaterThan(-1)
 
 		const tick = source.slice(start, source.indexOf('>', start))

@@ -12,6 +12,7 @@ import BaseChip from '@/components/ui/BaseChip.vue'
 import BaseSheet from '@/components/ui/BaseSheet.vue'
 import { useSheet } from '@/composables/useSheet'
 import { lastMadeLabel } from '@/lib/dates'
+import { partClass, partGroups } from '@/lib/mealIngredients'
 import { fmtQty } from '@/lib/quantities'
 import { useMealsStore } from '@/stores/meals'
 import { usePlanStore } from '@/stores/plan'
@@ -39,6 +40,21 @@ watch(
 )
 
 const isPlanned = computed(() => (meal.value ? plan.isPlanned(meal.value.id) : false))
+
+/*
+The ingredients as they were written: the parts of the recipe in order, each
+wrapped in its own colour, and anything belonging to no part as a plain run.
+
+A meal with no parts yields one unnamed group, so this is also the flat list
+every meal had before parts existed — there is no second code path for the
+common case.
+
+An ingredient two parts both want is written into both, and appears in both
+here. That is the point: this screen is the recipe, and the sauce needing lime
+is not less true for the marinade needing it too. The shopping list is where
+they become one line.
+*/
+const groups = computed(() => partGroups(meal.value?.ingredients ?? []))
 
 function quantityOf(ingredient: Ingredient): string {
 	return fmtQty(ingredient.amount, ingredient.unit)
@@ -88,23 +104,36 @@ function edit() {
 
 			<div v-if="meal.ingredients.length" class="overflow-hidden rounded-card bg-surface">
 				<div
-					v-for="(ingredient, index) in meal.ingredients"
-					:key="`${ingredient.name}-${index}`"
-					class="flex items-baseline gap-2.5 px-3 py-2"
-					:class="{ 'border-t border-border': index > 0 }"
+					v-for="(group, g) in groups"
+					:key="g"
+					:class="[
+						group.slot && `part-band ${partClass(group.slot)}`,
+						// `border-t-border`, not `border-border`: an all-sides colour
+						// utility outranks the band's own left stripe and turns it gray.
+						g > 0 && 'border-t border-t-border',
+					]"
 				>
-					<span class="flex-1 text-sm">{{ ingredient.name }}</span>
-					<span
-						v-if="quantityOf(ingredient)"
-						class="flex-none font-heading text-[13px] font-semibold whitespace-nowrap text-accent"
+					<p v-if="group.part" class="part-name px-3 pt-2 pb-0.5">{{ group.part }}</p>
+
+					<div
+						v-for="(ingredient, index) in group.ingredients"
+						:key="`${ingredient.name}-${index}`"
+						class="flex items-baseline gap-2.5 px-3 py-2"
+						:class="{ 'border-t border-border': index > 0 }"
 					>
-						{{ quantityOf(ingredient) }}
-					</span>
-					<span
-						class="w-16 flex-none text-right text-micro tracking-[0.06em] text-subtle uppercase"
-					>
-						{{ STORE_LABELS[ingredient.store ?? 'wherever'] }}
-					</span>
+						<span class="flex-1 text-sm">{{ ingredient.name }}</span>
+						<span
+							v-if="quantityOf(ingredient)"
+							class="flex-none font-heading text-[13px] font-semibold whitespace-nowrap text-accent"
+						>
+							{{ quantityOf(ingredient) }}
+						</span>
+						<span
+							class="w-16 flex-none text-right text-micro tracking-[0.06em] text-subtle uppercase"
+						>
+							{{ STORE_LABELS[ingredient.store ?? 'wherever'] }}
+						</span>
+					</div>
 				</div>
 			</div>
 

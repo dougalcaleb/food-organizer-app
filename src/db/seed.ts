@@ -92,13 +92,20 @@ const SEED_MEALS: SeedMeal[] = [
 		weeksAgo: 20,
 		notes:
 			'Marinade in the morning, broil at the end for the crisp edges. Garlic sauce is the whole point.',
+		/*
+		The one seeded meal written in parts, so dev has both shapes on screen —
+		and it carries the shared-ingredient case on purpose: the lemons are in the
+		marinade AND in the sauce, written into both, one line on the shopping list.
+		*/
 		ingredients: [
-			{ name: 'chicken thighs', amount: 2, unit: 'lb', store: 'costco' },
-			{ name: 'plain yogurt', amount: 1, unit: 'tub', store: 'costco' },
-			{ name: 'lemons', amount: 3, unit: '', store: 'walmart' },
-			{ name: 'cumin', amount: 1, unit: 'jar', store: 'wherever' },
-			{ name: 'pita', amount: 1, unit: 'pack', store: 'walmart' },
-			{ name: 'cucumber', amount: 2, unit: '', store: 'walmart' },
+			{ name: 'chicken thighs', amount: 2, unit: 'lb', store: 'costco', part: 'Marinade' },
+			{ name: 'lemons', amount: 2, unit: '', store: 'walmart', part: 'Marinade' },
+			{ name: 'cumin', amount: 1, unit: 'jar', store: 'wherever', part: 'Marinade' },
+			{ name: 'plain yogurt', amount: 1, unit: 'tub', store: 'costco', part: 'Garlic sauce' },
+			{ name: 'lemons', amount: 1, unit: '', store: 'walmart', part: 'Garlic sauce' },
+			{ name: 'garlic', amount: 1, unit: 'head', store: 'walmart', part: 'Garlic sauce' },
+			{ name: 'pita', amount: 1, unit: 'pack', store: 'walmart', part: 'The bowl' },
+			{ name: 'cucumber', amount: 2, unit: '', store: 'walmart', part: 'The bowl' },
 		],
 	},
 	{
