@@ -61,13 +61,18 @@ async function addItem() {
 }
 
 /**
- * Correct the store of an extra already on the list — the row's hold gesture.
- * Nothing else on this screen can be edited in place: a meal ingredient's
- * store belongs to the meal, and is changed in the meal editor.
+ * Correct an extra already on the list — the row's hold gesture, which opens
+ * its name and its store together. Nothing else on this screen can be edited in
+ * place: a meal ingredient belongs to the meal, and is changed in the meal
+ * editor.
+ *
+ * Renaming is safe from here because an extra's shopping key is its id, not its
+ * name — so a fixed typo keeps its place in the cart instead of stranding a
+ * checked key the way a renamed meal ingredient would.
  */
-async function setStore(key: string, store: Store) {
+async function editExtra(key: string, patch: { store?: Store; name?: string }) {
 	const id = extraIdFromKey(key)
-	if (id) await list.updateExtra(id, { store })
+	if (id) await list.updateExtra(id, patch)
 }
 
 /** The stored extra behind a shopping row, if the row is an extra at all. */
@@ -107,7 +112,8 @@ const confirmOpen = ref(false)
 					:store="extraFor(item.key)?.store"
 					@toggle="list.toggle(item.key)"
 					@pin="list.toggleStaple(extraIdFromKey(item.key)!)"
-					@update:store="setStore(item.key, $event)"
+					@update:store="editExtra(item.key, { store: $event })"
+					@update:name="editExtra(item.key, { name: $event })"
 				/>
 			</div>
 		</section>
@@ -141,7 +147,7 @@ const confirmOpen = ref(false)
 			<StorePicker v-model="newStore" class="mt-2" />
 
 			<p class="mt-2 px-1 text-meta text-subtle text-pretty">
-				Hold an item above to change its store.
+				Hold an item above to fix its name or change its store.
 			</p>
 		</section>
 

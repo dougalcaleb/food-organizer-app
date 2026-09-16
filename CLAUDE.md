@@ -180,22 +180,41 @@ Two consequences worth keeping straight:
   there was a delete button, every extra left through `clearCart`, which wipes
   `checked` wholesale. Now one can leave on its own.
 
-**An extra's store is corrected by holding its row.** Both stores were
-write-once at first: a one-off filed under the wrong heading could only be
-deleted and retyped, and a staple's store could not be reached at all after it
-was created. The shopping row's fix is a gesture, not a control, and that
-follows from the rule above it — the row's words are inert on purpose, so there
-is no room for a second visible target that is not the checkbox, and a hold is
-the one input that cannot be made by accident. `composables/useLongPress.ts`
-owns it; `components/list/holdToEditStore.spec.ts` guards it.
+**An extra is corrected by holding its row — its name and its store.** Both
+were write-once at first: a one-off filed under the wrong heading could only be
+deleted and retyped, a staple's store could not be reached at all after it was
+created, and a misspelled one-off could only be fixed by checking it off,
+finishing the trip and typing it again — which is to say, by buying a thing to
+correct its spelling. The shopping row's fix is a gesture, not a control, and
+that follows from the rule above it — the row's words are inert on purpose, so
+there is no room for a second visible target that is not the checkbox, and a
+hold is the one input that cannot be made by accident.
+`composables/useLongPress.ts` owns it; `components/list/holdToEditStore.spec.ts`
+guards it.
 
-Two things about that gesture are easy to break:
+Renaming is only safe on **extras**, and only because an extra's shopping key is
+`extraKey(id)`. A meal ingredient's key is its normalized name, so the same edit
+there moves the row and strands its checked key and its pull — which is why that
+edit stays in the meal editor, and why nothing gives a cart row an editor at
+all.
+
+The name is a **draft** until something commits it: a write per keystroke would
+put `''` into the one field a record may never lose, halfway through clearing
+it to retype. Enter, a blur and a store pick all commit; a blank or unchanged
+draft commits nothing. Four things about that gesture are easy to break:
 
 - **The hold's release still arrives as a `click`.** Without
   `consumeClick()`, a hold started over the checkbox opens the picker _and_
   checks the item off in one gesture. The flag is cleared by the next
   `pointerdown`, because a hold that ends over the inert text has no click to
   consume it and would otherwise swallow the next real tap.
+- **The hold is listening one element above the field it opened.** A press
+  held inside the name input is someone placing a caret, and without
+  `@pointerdown.stop` on the editor panel it times out at 450ms and shuts the
+  editor being typed in. The root's `select-none` has to be undone on the field
+  itself for the same reason.
+- **Closing clears the draft**, because closing unmounts the input and a late
+  blur would otherwise send the same rename twice.
 - **The picker's exit is tapping the store the row already has**, which means
   the chips cannot report that through the model alone: `defineModel`
   suppresses an unchanged write, so `StorePicker` emits its own `pick` on every

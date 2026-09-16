@@ -14,10 +14,15 @@ its own 44px column running the full height of the row, negative margins and
 all, and the text beside it is inert. It is the same tap area the checkbox
 always had, minus the part that was over something else's label.
 
-An extra's store is editable here by holding the row, which opens a picker on a
-second line. That is a gesture rather than a control for the same reason the
-words are inert: there is no room on this row for a target that is not the
+An extra is edited here by holding the row, which opens its name and its store
+on a second line. That is a gesture rather than a control for the same reason
+the words are inert: there is no room on this row for a target that is not the
 checkbox, and a hold is the one input that cannot be made by accident.
+
+The name is there because a typo was otherwise permanent. "banas" could only be
+fixed by checking it off, finishing the trip and typing it again — which is the
+same shape of problem the store had before this editor existed, and worse,
+because it makes you buy the thing to correct the spelling of it.
 */
 import { ref } from 'vue'
 import StorePicker from '@/components/ui/StorePicker.vue'
@@ -50,12 +55,31 @@ const props = defineProps<{
 	store?: Store
 }>()
 
-const emit = defineEmits<{ toggle: []; pin: []; 'update:store': [Store] }>()
+const emit = defineEmits<{
+	toggle: []
+	pin: []
+	'update:store': [Store]
+	'update:name': [string]
+}>()
 
 const editing = ref(false)
+/*
+The name is edited through a draft rather than straight through to the store:
+every keystroke would otherwise rewrite the record, and an emptied field would
+be a write of `''` to the one thing a record is never allowed to lose.
+*/
+const draftName = ref('')
 
 const press = useLongPress(() => {
-	if (props.store) editing.value = !editing.value
+	if (!props.store) return
+
+	if (editing.value) {
+		closeEditor()
+		return
+	}
+
+	draftName.value = props.item.name
+	editing.value = true
 })
 
 /*
@@ -72,9 +96,26 @@ function onPin() {
 	emit('pin')
 }
 
+/**
+ * Write the typed name back, if it says anything and says something new.
+ *
+ * A blank field is not a rename — only `name` is ever required, so there is no
+ * way to express "no name" — and it is what the field holds halfway through
+ * clearing one to retype it. The row keeps the name it had.
+ */
+function commitName() {
+	const trimmed = draftName.value.trim()
+	if (!trimmed || trimmed === props.item.name) return
+
+	emit('update:name', trimmed)
+}
+
 // Closing on any pick is also the way out: tapping the store the row already
-// has dismisses the picker without changing anything.
-function closePicker() {
+// has dismisses the editor without changing anything about it.
+function closeEditor() {
+	commitName()
+	// Nothing left to commit, so a blur on the way out cannot fire a second time.
+	draftName.value = ''
 	editing.value = false
 }
 </script>
@@ -143,12 +184,29 @@ function closePicker() {
 			Wraps onto its own flex line rather than nesting, so the row stays a
 			single `.list-row` and the dividers between rows keep working.
 		-->
-		<div v-if="editing && store" class="w-full pt-3 pl-8">
+		<!--
+			`pointerdown.stop` keeps the hold gesture off its own editor: a press
+			held inside the name field is someone placing the caret, and without
+			this it would time out at 450ms and shut the editor they are typing in.
+			The root's `select-none` has to be undone on the field for the same
+			reason.
+		-->
+		<div v-if="editing && store" class="w-full space-y-2 pt-3 pl-8" @pointerdown.stop>
+			<input
+				v-model="draftName"
+				class="input select-text"
+				aria-label="Item name"
+				autocomplete="off"
+				enterkeyhint="enter"
+				@keydown.enter.prevent="closeEditor"
+				@blur="commitName"
+			/>
+
 			<StorePicker
 				:model-value="store"
 				label="Buy at"
 				@update:model-value="emit('update:store', $event)"
-				@pick="closePicker"
+				@pick="closeEditor"
 			/>
 		</div>
 	</div>

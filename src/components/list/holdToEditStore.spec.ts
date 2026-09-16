@@ -10,6 +10,11 @@ and that error is only noticed at home.
 That makes the hold's own release the interesting case. The browser still sends
 a `click` when the finger comes up, so a hold that starts over the checkbox
 would otherwise open the picker and check the item off in the same gesture.
+
+The same editor renames the item, for the same reason it re-stores it: a typo
+was otherwise only fixable by buying the thing and typing it again. The name is
+a draft until something commits it, so what each way out of the editor does
+with that draft is the rest of what is guarded here.
 */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -30,6 +35,11 @@ type Row = ReturnType<typeof row>
 /** The store chips, which exist only while the editor is open. */
 function chips(wrapper: Row) {
 	return wrapper.findAll('.chip')
+}
+
+/** The name field, which exists only while the editor is open. */
+function nameField(wrapper: Row) {
+	return wrapper.find('input')
 }
 
 async function hold(wrapper: Row, ms = LONG_PRESS_MS) {
@@ -140,5 +150,100 @@ describe('picking a store', () => {
 
 		expect(chips(wrapper).map((c) => c.text())).toEqual(['Costco', 'Walmart', 'Either', 'Wherever'])
 		expect(chips(wrapper).filter((c) => c.attributes('aria-pressed') === 'true')).toHaveLength(1)
+	})
+})
+
+describe('renaming the item', () => {
+	it('opens on the name it already has', async () => {
+		const wrapper = row()
+		await hold(wrapper)
+
+		expect((nameField(wrapper).element as HTMLInputElement).value).toBe('coconut milk')
+	})
+
+	it('reports the new name on Enter, and closes', async () => {
+		const wrapper = row()
+		await hold(wrapper)
+
+		await nameField(wrapper).setValue('coconut cream')
+		await nameField(wrapper).trigger('keydown.enter')
+
+		expect(wrapper.emitted('update:name')).toEqual([['coconut cream']])
+		expect(chips(wrapper)).toHaveLength(0)
+	})
+
+	it('keeps a rename made on the way out through the store chips', async () => {
+		// Picking a store is the other exit, and it must not discard the draft.
+		const wrapper = row()
+		await hold(wrapper)
+
+		await nameField(wrapper).setValue('coconut cream')
+		await chips(wrapper)
+			.find((c) => c.text() === 'Walmart')!
+			.trigger('click')
+
+		expect(wrapper.emitted('update:name')).toEqual([['coconut cream']])
+		expect(wrapper.emitted('update:store')).toEqual([['walmart']])
+	})
+
+	it('commits on blur, so tapping away does not lose the edit', async () => {
+		const wrapper = row()
+		await hold(wrapper)
+
+		await nameField(wrapper).setValue('coconut cream')
+		await nameField(wrapper).trigger('blur')
+
+		expect(wrapper.emitted('update:name')).toEqual([['coconut cream']])
+	})
+
+	it('reports nothing when the name is untouched', async () => {
+		const wrapper = row()
+		await hold(wrapper)
+
+		await nameField(wrapper).trigger('keydown.enter')
+
+		expect(wrapper.emitted('update:name')).toBeUndefined()
+	})
+
+	it('refuses to blank the name', async () => {
+		// Only `name` is ever required, so there is no rename that removes it —
+		// and an emptied field is what clearing one to retype it looks like.
+		const wrapper = row()
+		await hold(wrapper)
+
+		await nameField(wrapper).setValue('   ')
+		await nameField(wrapper).trigger('keydown.enter')
+
+		expect(wrapper.emitted('update:name')).toBeUndefined()
+	})
+
+	it('does not commit twice when the editor closes over the field', async () => {
+		// Closing unmounts the input, and a blur on the way out would otherwise
+		// send the same rename a second time.
+		const wrapper = row()
+		await hold(wrapper)
+
+		// Held onto, because closing takes the field out of the DOM — the handler
+		// is still on the element, which is what a late blur would reach.
+		const field = nameField(wrapper)
+
+		await field.setValue('coconut cream')
+		await field.trigger('keydown.enter')
+		await field.trigger('blur')
+
+		expect(wrapper.emitted('update:name')).toHaveLength(1)
+	})
+
+	it('is not shut by a press held inside its own name field', async () => {
+		// Placing the caret is a press like any other, and the row's hold timer
+		// is listening one element up.
+		const wrapper = row()
+		await hold(wrapper)
+
+		await nameField(wrapper).trigger('pointerdown', { clientX: 10, clientY: 10 })
+		vi.advanceTimersByTime(LONG_PRESS_MS)
+		await wrapper.vm.$nextTick()
+
+		expect(chips(wrapper).length).toBeGreaterThan(0)
 	})
 })
