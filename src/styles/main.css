@@ -26,3 +26,7 @@ https://stackoverflow.com/questions/79323991/how-is-it-possible-to-specify-a-saf
 @source inline('h-{{4..10}}');
 @source inline('w-{{4..20..2}}');
 @source inline('w-{{4..10}}');
+
+*:not(input) {
+	user-select: none;
+}
